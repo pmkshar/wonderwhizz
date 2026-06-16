@@ -7,7 +7,8 @@ const schema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email(),
   password: z.string().min(6).max(128),
-  grade: z.number().int().min(1).max(10).optional(),
+  grade: z.number().int().min(1).max(12).optional(),
+  role: z.enum(['student', 'parent']).optional(),
 })
 
 export async function POST(req: Request) {
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
       { status: 400 }
     )
   }
-  const { name, email, password, grade } = parsed.data
+  const { name, email, password, grade, role } = parsed.data
   const normalizedEmail = email.toLowerCase().trim()
   const existing = await db.user.findUnique({ where: { email: normalizedEmail } })
   if (existing) {
@@ -41,10 +42,11 @@ export async function POST(req: Request) {
       passwordHash,
       provider: 'credentials',
       grade: grade ?? 8,
+      role: role ?? 'student',
     },
   })
   return NextResponse.json({
     ok: true,
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
   })
 }

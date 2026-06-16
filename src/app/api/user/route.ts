@@ -10,7 +10,7 @@ export async function GET() {
   }
   const user = await db.user.findUnique({
     where: { email: session.user.email.toLowerCase() },
-    select: { id: true, name: true, email: true, image: true, grade: true, provider: true },
+    select: { id: true, name: true, email: true, image: true, grade: true, provider: true, role: true },
   })
   return NextResponse.json({ user })
 }
@@ -20,13 +20,20 @@ export async function PATCH(req: Request) {
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const body = (await req.json().catch(() => ({}))) as { grade?: number; name?: string }
-  const data: { grade?: number; name?: string } = {}
-  if (typeof body.grade === 'number' && body.grade >= 1 && body.grade <= 10) {
+  const body = (await req.json().catch(() => ({}))) as {
+    grade?: number
+    name?: string
+    role?: string
+  }
+  const data: { grade?: number; name?: string; role?: string } = {}
+  if (typeof body.grade === 'number' && body.grade >= 1 && body.grade <= 12) {
     data.grade = body.grade
   }
   if (typeof body.name === 'string' && body.name.trim().length > 0) {
     data.name = body.name.trim().slice(0, 80)
+  }
+  if (body.role === 'student' || body.role === 'parent') {
+    data.role = body.role
   }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
@@ -34,7 +41,7 @@ export async function PATCH(req: Request) {
   const updated = await db.user.update({
     where: { email: session.user.email.toLowerCase() },
     data,
-    select: { id: true, name: true, email: true, grade: true, image: true, provider: true },
+    select: { id: true, name: true, email: true, grade: true, image: true, provider: true, role: true },
   })
   return NextResponse.json({ user: updated })
 }

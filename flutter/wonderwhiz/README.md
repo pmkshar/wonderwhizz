@@ -1,22 +1,22 @@
 # WonderWhiz — AI Tutor Bot for Kids (Flutter Mobile App)
 
-A friendly AI tutor app for **Maths, Hindi, Science, and Kannada** for kids in **Class 1 to 10**.
+A friendly AI tutor app for **Maths, Hindi, Science, and Kannada** for kids in **Class K-12**.
 
-It comes with **8 different explanation styles** for every question:
+## 🆕 New in v2
 
-1. 📚 Detailed Step-by-Step
-2. ⚡ Concise Answer
-3. 💡 Intuitive Explanation
-4. 🎯 Tips & Tricks
-5. 📊 Visual & Graphical
-6. 🧠 Logic & Reasoning
-7. 💻 Code-Based
-8. 🤣 Humorous
+- 🎯 **Question Bank** — 46+ pre-built questions across all subjects, grades, and maths topics with instant feedback, hints, and explanations
+- 📊 **Progress Dashboard** — track questions asked, practice accuracy, current & best streak, achievements, subject/topic breakdowns, 7-day activity chart
+- 👨‍👩‍👧 **Parent Dashboard** — parents can link their child's account by email and monitor progress, accuracy, achievements, recent activity
+- 🧮 **Math Keyboard** — 6 categories of math symbols (Basic, Powers, Constants, Functions, Calculus, Geometry) with ∫, √, π, θ, sin, cos, ∂, ∞, ∠, ⊥, °, ∑, and more
+- 🧭 **8 Maths Topics** — Pre-Algebra, Algebra, Geometry, Trigonometry, Calculus, Statistics, Linear Algebra, Word Problems
+- 🏆 **Achievements** — 10 badges (First Question, Curious Mind, Question Conqueror, Practice Rookie, Practice Pro, On a Roll, Unstoppable, Math Explorer, Polyglot, Style Master)
+- 🎓 **K-12 Grade Support** — full K-12 scale (Class 1-12)
 
-…plus **voice-over in English, Hindi, and Kannada**.
+## ✨ Existing features
 
-The Flutter app talks to the **same backend** as the Next.js web app, so kids
-can use the same email & password everywhere.
+- 8 explanation styles per question: Detailed Step-by-Step 📚, Concise ⚡, Intuitive 💡, Tips & Tricks 🎯, Visual & Graphical 📊, Logic & Reasoning 🧠, Code-Based 💻, Humorous 🤣
+- Voice-over in English, Hindi, Kannada
+- Same backend as the web app — kids log in with the same email & password
 
 ---
 
@@ -26,21 +26,26 @@ can use the same email & password everywhere.
 flutter/
 └── wonderwhiz/
     ├── lib/
-    │   ├── main.dart               ← App entry + splash + routing
-    │   ├── api.dart                ← HTTP client (/api/tutor, /api/tts, /api/user, NextAuth)
+    │   ├── main.dart
+    │   ├── api.dart                       # HTTP client (/api/tutor, /api/tts, /api/practice, etc.)
     │   ├── models/
-    │   │   └── models.dart         ← Subject, ExplanationStyle, VoiceOption, color helpers
+    │   │   └── models.dart                # Subject, MathsTopic, ExplanationStyle, VoiceOption, MathKeyPad, QuestionBankItem
     │   ├── screens/
-    │   │   ├── login_screen.dart   ← Email/password + Google sign-in
-    │   │   ├── home_screen.dart    ← Subject picker, question input, style picker, voice picker
-    │   │   └── result_screen.dart  ← Markdown answer + audio playback
+    │   │   ├── login_screen.dart          # Email/password + Google sign-in
+    │   │   ├── home_screen.dart           # Subject picker, topic picker, math keyboard toggle, question input
+    │   │   ├── result_screen.dart         # Markdown answer + audio playback
+    │   │   ├── question_bank_screen.dart  # Browse & practice pre-built questions
+    │   │   ├── progress_screen.dart       # Student's progress dashboard
+    │   │   └── parent_dashboard_screen.dart # Parent view of linked children
     │   └── widgets/
     │       ├── subject_selector.dart
+    │       ├── maths_topic_selector.dart
     │       ├── style_selector.dart
-    │       └── voice_picker.dart
-    ├── android/                    ← AndroidManifest.xml (INTERNET permission + cleartext)
-    ├── ios/                        ← Info.plist (NSAppTransportSecurity, Google URL scheme)
-    └── pubspec.yaml                ← Flutter dependencies
+    │       ├── voice_picker.dart
+    │       └── math_keyboard.dart         # Modal bottom-sheet math keyboard
+    ├── android/                           # AndroidManifest.xml (INTERNET + cleartext)
+    ├── ios/                               # Info.plist (ATS + Google URL scheme)
+    └── pubspec.yaml
 ```
 
 ---
@@ -48,15 +53,12 @@ flutter/
 ## 🚀 Build & install
 
 ### 0. Prerequisites
-
-- Flutter SDK ≥ 3.0 (install: https://docs.flutter.dev/get-started/install)
+- Flutter SDK ≥ 3.0 (https://docs.flutter.dev/get-started/install)
 - For Android: Android Studio + Android SDK
 - For iOS: macOS + Xcode + CocoaPods
 
 ### 1. Configure the backend URL
-
 Open `lib/api.dart` and set `WonderWhizConfig.baseUrl`:
-
 ```dart
 /// For Android emulator: 'http://10.0.2.2:3000'
 /// For iOS simulator:    'http://localhost:3000'
@@ -66,65 +68,35 @@ static const String baseUrl = 'http://10.0.2.2:3000';
 ```
 
 ### 2. Install dependencies
-
 ```bash
 cd flutter/wonderwhiz
 flutter pub get
 ```
 
 ### 3. Run on a device/emulator
-
 ```bash
 flutter run --release
 ```
 
 ### 4. Build a release APK (Android)
-
 ```bash
 flutter build apk --release
-# Output: build/app/outputs/flutter-apk/app-release.apk
 adb install build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ### 5. Build an IPA (iOS, requires Mac + Xcode)
-
 ```bash
 flutter build ipa --release
-# Output: build/ios/ipa/wonderwhiz.ipa
-open build/ios/archive/*.xcarchive   # then distribute via Xcode Organizer
+open build/ios/archive/*.xcarchive
 ```
 
 ---
 
-## 🔐 Authentication
+## 🔐 Authentication & Roles
 
-The app supports **email/password** and **Google sign-in**.
-
-- Email/password goes through NextAuth's `/api/auth/callback/credentials` endpoint.
-  The session cookie is stored on-device via `shared_preferences` and sent with
-  every subsequent API call.
-- Google sign-in uses the `google_sign_in` package. Because NextAuth's Google
-  provider requires a server-side OAuth callback, the simplest flow is:
-  1. User taps "Continue with Google" on the **web app** (which handles the full
-     OAuth round-trip with NextAuth).
-  2. After the web login completes, the same email & password-less session token
-     is reused by the app.
-  
-  For a fully native Google sign-in, replace `_doGoogle()` in
-  `lib/screens/login_screen.dart` with the official `google_sign_in` flow that
-  sends the Google ID token to a custom `/api/auth/google-native` endpoint you
-  add to the Next.js backend. See:
-  https://next-auth.js.org/tutorials/nextauth-google-native
-
----
-
-## 🎧 Voice-over
-
-The app calls `/api/tts` on the backend, which uses `z-ai-web-dev-sdk` to
-generate a WAV audio file. The file is played locally via `audioplayers`.
-
-The first ~1200 characters of the answer are read aloud — long enough for most
-exam answers while keeping latency reasonable.
+- **Student role** — can ask questions, use the math keyboard, practice in the question bank, and view their progress
+- **Parent role** — sees a "My Children" button instead of the tutor; can link child accounts by email and monitor their progress
+- Same email & password works on both web and mobile
 
 ---
 
@@ -132,12 +104,11 @@ exam answers while keeping latency reasonable.
 
 | Problem | Fix |
 |---------|-----|
-| `SocketException: Connection refused` on Android emulator | Make sure the dev server is running on the host (`bun run dev` on port 3000). The emulator maps `10.0.2.2` to host's localhost. |
-| `SocketException` on physical device | Set `baseUrl` to your machine's LAN IP (e.g. `http://192.168.1.5:3000`). Both devices must be on the same Wi-Fi. |
-| `CLEARTEXT communication to ... not permitted` | The included `AndroidManifest.xml` already sets `android:usesCleartextTraffic="true"`. For production, switch to HTTPS. |
-| iOS App Transport Security errors | `Info.plist` includes `NSAllowsArbitraryLoads = true` for development. For production, restrict to your HTTPS domain. |
-| Google sign-in not working | See the Authentication section above — native Google sign-in requires an additional `/api/auth/google-native` endpoint on the backend. |
-| TTS audio is silent | Wait for the audio to fully load (button shows "Generating..."). The first call may take 10-20 seconds depending on the answer length. |
+| `SocketException` on Android emulator | Make sure the dev server is running on the host (port 3000). Emulator maps `10.0.2.2` to host's localhost. |
+| `SocketException` on physical device | Set `baseUrl` to your machine's LAN IP. Both devices must be on the same Wi-Fi. |
+| `CLEARTEXT communication` errors | `AndroidManifest.xml` already sets `usesCleartextTraffic="true"`. For production, switch to HTTPS. |
+| iOS App Transport Security errors | `Info.plist` includes `NSAllowsArbitraryLoads = true` for development. For production, restrict to HTTPS. |
+| Google sign-in not working | See Authentication section in the previous README — requires an extra backend endpoint. |
 
 ---
 

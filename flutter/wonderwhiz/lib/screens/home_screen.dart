@@ -5,7 +5,11 @@ import '../models/models.dart';
 import '../widgets/subject_selector.dart';
 import '../widgets/style_selector.dart';
 import '../widgets/voice_picker.dart';
+import '../widgets/maths_topic_selector.dart';
+import '../widgets/math_keyboard.dart';
 import 'result_screen.dart';
+import 'question_bank_screen.dart';
+import 'progress_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,11 +22,13 @@ class _HomeScreenState extends State<HomeScreen> {
   AppUser? _user;
   bool _userLoading = true;
   String _subject = 'maths';
+  String? _topic;
   String _style = 'detailed';
   String _language = 'en';
   int _grade = 8;
   final _questionController = TextEditingController();
   bool _asking = false;
+  bool _useMathKeyboard = false;
 
   @override
   void initState() {
@@ -47,7 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onSubjectChanged(String id) {
-    setState(() => _subject = id);
+    setState(() {
+      _subject = id;
+      _topic = null; // reset topic on subject change
+    });
     // suggest a matching voice language
     if (id == 'hindi' && _language == 'en') {
       setState(() => _language = 'hi');
@@ -72,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
         question: q,
         language: _language,
         grade: _grade,
+        topic: _subject == 'maths' ? _topic : null,
       );
       if (!mounted) return;
       Navigator.of(context).push(
@@ -129,6 +139,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           if (_user != null) ...[
+            IconButton(
+              icon: const Icon(Icons.bar_chart),
+              tooltip: 'My Progress',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProgressScreen()),
+                );
+              },
+            ),
             PopupMenuButton<String>(
               onSelected: (v) async {
                 if (v == 'logout') _signOut();
@@ -204,15 +223,69 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 16),
 
+          // Question bank shortcut
+          Card(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => QuestionBankScreen(
+                      grade: _grade,
+                      initialSubject: _subject,
+                      onAskTutor: (q) {
+                        _questionController.text = q;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Question loaded — pick a style and ask!')),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFFBBF24), Color(0xFFF97316)]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(child: Text('🎯', style: TextStyle(fontSize: 22))),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Practice with Pre-Built Questions',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text(
+                              'Curated by grade & topic. Instant feedback, hints, achievements.',
+                              style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.black45),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Grade selector
           _SectionCard(
             step: 0,
-            title: 'Your Class',
+            title: 'Your Class (K-12)',
             child: DropdownButtonFormField<int>(
               value: _grade,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: [
-                for (var g = 1; g <= 10; g++)
+                for (var g = 1; g <= 12; g++)
                   DropdownMenuItem(value: g, child: Text('Class $g'))
               ],
               onChanged: (v) => _changeGrade(v ?? 8),
@@ -228,19 +301,67 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 16),
 
+          // Step 1.5: Maths topic (only for maths)
+          if (_subject == 'maths') ...[
+            _SectionCard(
+              step: '1½',
+              title: 'Pick a maths topic (optional)',
+              subtitle: 'Pre-Algebra · Algebra · Geometry · Trig · Calculus · Statistics · Linear Algebra · Word Problems',
+              child: MathsTopicSelector(value: _topic, onChanged: (v) => setState(() => _topic = v)),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // Step 2: Question
           _SectionCard(
             step: 2,
             title: 'Ask your question',
             child: Column(
               children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('✍️ Type your question',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    if (_subject == 'maths')
+                      FilterChip(
+                        label: Text(_useMathKeyboard ? 'Math keyboard ON' : 'Math keyboard',
+                            style: const TextStyle(fontSize: 11)),
+                        selected: _useMathKeyboard,
+                        onSelected: (v) {
+                          setState(() => _useMathKeyboard = v);
+                          if (v) {
+                            showMathKeyboard(
+                              context,
+                              controller: _questionController,
+                              onSubmit: _ask,
+                            );
+                          }
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _questionController,
                   minLines: 3,
                   maxLines: 6,
-                  decoration: const InputDecoration(
-                    hintText: 'Type your question here...',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    hintText: _subject == 'maths' && _useMathKeyboard
+                        ? 'Tap 🧮 to open the math keyboard...'
+                        : 'Type your question here...',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _subject == 'maths'
+                        ? IconButton(
+                            icon: const Icon(Icons.keyboard),
+                            tooltip: 'Open math keyboard',
+                            onPressed: () => showMathKeyboard(
+                              context,
+                              controller: _questionController,
+                              onSubmit: _ask,
+                            ),
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -255,6 +376,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () => _questionController.text = ex,
                         ),
                     ],
+                  ),
+                if (_topic != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Chip(
+                        label: Text(
+                          'Focused on: ${_topic!.replaceAll('_', ' ')}',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      ),
+                    ),
                   ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -306,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _SectionCard extends StatelessWidget {
-  final int step;
+  final Object step; // int or String
   final String title;
   final String? subtitle;
   final Widget child;
@@ -320,6 +455,8 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stepNum = step is int ? step as int : 0;
+    final showStep = stepNum > 0 || step is String;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -328,7 +465,7 @@ class _SectionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                if (step > 0)
+                if (showStep)
                   Container(
                     width: 26,
                     height: 26,
@@ -346,7 +483,7 @@ class _SectionCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (step > 0) const SizedBox(width: 8),
+                if (showStep) const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

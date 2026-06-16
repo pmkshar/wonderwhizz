@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Markdown } from '@/components/markdown/markdown'
 import { VoicePlayer } from './voice-player'
 import { EXPLANATION_STYLES, type ExplanationStyleId } from '@/lib/explanation-prompts'
-import { SUBJECTS } from './subject-selector'
+import { SUBJECTS, getMathsTopic } from '@/lib/subjects'
 import { Copy, Check, RefreshCw, Volume2 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -16,6 +16,7 @@ interface Props {
   subject: string
   style: ExplanationStyleId
   language: string
+  topic?: string | null
   loading?: boolean
   onRegenerate?: () => void
 }
@@ -25,12 +26,14 @@ export function ExplanationResult({
   subject,
   style,
   language,
+  topic,
   loading,
   onRegenerate,
 }: Props) {
   const [copied, setCopied] = useState(false)
   const styleData = EXPLANATION_STYLES.find((s) => s.id === style)
   const subjectData = SUBJECTS.find((s) => s.id === subject)
+  const topicData = topic ? getMathsTopic(topic) : undefined
 
   async function handleCopy() {
     try {
@@ -87,6 +90,11 @@ export function ExplanationResult({
               {subjectData && (
                 <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px]">
                   <span>{subjectData.emoji}</span> {subjectData.label}
+                </Badge>
+              )}
+              {topicData && (
+                <Badge variant="outline" className="gap-1 px-1.5 py-0 text-[10px]">
+                  <span>{topicData.emoji}</span> {topicData.label}
                 </Badge>
               )}
               <Badge variant="outline" className="px-1.5 py-0 text-[10px]">

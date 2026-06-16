@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Mail, Lock, User, Sparkles, GraduationCap } from 'lucide-react'
+import { Loader2, Mail, Lock, User, Sparkles, GraduationCap, Users } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const SUBJECTS = [
   { emoji: '➗', label: 'Maths' },
@@ -32,6 +33,7 @@ export function AuthScreen() {
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regGrade, setRegGrade] = useState<number>(8)
+  const [regRole, setRegRole] = useState<'student' | 'parent'>('student')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -69,7 +71,8 @@ export function AuthScreen() {
           name: regName,
           email: regEmail,
           password: regPassword,
-          grade: regGrade,
+          grade: regRole === 'parent' ? 8 : regGrade,
+          role: regRole,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
@@ -231,6 +234,35 @@ export function AuthScreen() {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="reg-role">I am a...</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setRegRole('student')}
+                          className={cn(
+                            'flex items-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-all',
+                            regRole === 'student'
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border hover:border-primary/40'
+                          )}
+                        >
+                          <GraduationCap className="h-4 w-4" /> Student
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRegRole('parent')}
+                          className={cn(
+                            'flex items-center gap-2 rounded-lg border-2 p-2.5 text-sm font-medium transition-all',
+                            regRole === 'parent'
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border hover:border-primary/40'
+                          )}
+                        >
+                          <Users className="h-4 w-4" /> Parent
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="reg-email">Parent Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -262,24 +294,33 @@ export function AuthScreen() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-grade">Class / Grade</Label>
-                      <div className="relative">
-                        <GraduationCap className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <select
-                          id="reg-grade"
-                          value={regGrade}
-                          onChange={(e) => setRegGrade(Number(e.target.value))}
-                          className="h-10 w-full appearance-none rounded-md border border-input bg-background pl-9 pr-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                            <option key={g} value={g}>
-                              Class {g}
-                            </option>
-                          ))}
-                        </select>
+                    {regRole === 'student' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="reg-grade">Class / Grade (K-12)</Label>
+                        <div className="relative">
+                          <GraduationCap className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <select
+                            id="reg-grade"
+                            value={regGrade}
+                            onChange={(e) => setRegGrade(Number(e.target.value))}
+                            className="h-10 w-full appearance-none rounded-md border border-input bg-background pl-9 pr-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                              <option key={g} value={g}>
+                                Class {g}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {regRole === 'parent' && (
+                      <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+                        💡 As a parent, you can link your child&apos;s account after
+                        signing in to monitor their progress, accuracy, and
+                        achievements.
+                      </div>
+                    )}
                     <Button
                       type="submit"
                       className="w-full text-base font-semibold"

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Send, Sparkles, Eraser, Wand2 } from 'lucide-react'
-import { SUBJECTS } from './subject-selector'
+import { SUBJECTS, MATHS_TOPICS } from '@/lib/subjects'
 
 interface Props {
   subject: string
@@ -18,6 +18,14 @@ interface Props {
 export function QuestionInput({ subject, value, onChange, onSubmit, loading, disabled }: Props) {
   const subjectData = SUBJECTS.find((s) => s.id === subject)
   const [showExamples, setShowExamples] = useState(false)
+
+  // Build example list: subject examples + (for maths) topic examples
+  const examples: string[] = [...(subjectData?.examples ?? [])]
+  if (subject === 'maths') {
+    for (const t of MATHS_TOPICS) {
+      examples.push(...t.examples.slice(0, 1))
+    }
+  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -75,11 +83,11 @@ export function QuestionInput({ subject, value, onChange, onSubmit, loading, dis
         maxLength={4000}
       />
 
-      {showExamples && subjectData && (
+      {showExamples && (
         <div className="flex flex-wrap gap-2">
-          {subjectData.examples.map((ex) => (
+          {examples.map((ex, i) => (
             <button
-              key={ex}
+              key={i}
               type="button"
               onClick={() => onChange(ex)}
               disabled={disabled || loading}

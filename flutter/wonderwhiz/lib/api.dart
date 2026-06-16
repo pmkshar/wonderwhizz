@@ -190,6 +190,7 @@ class WonderWhizApi {
     required String question,
     required String language,
     int grade = 8,
+    String? topic,
   }) async {
     final cookie = await _cookieHeader();
     final res = await http.post(
@@ -205,6 +206,7 @@ class WonderWhizApi {
         'question': question,
         'language': language,
         'grade': grade,
+        if (topic != null) 'topic': topic,
       }),
     ).timeout(const Duration(seconds: 60));
     if (res.statusCode != 200) {
@@ -260,5 +262,116 @@ class WonderWhizApi {
   /// Sign out by clearing local session (best-effort server-side).
   static Future<void> signOut() async {
     await clearSession();
+  }
+
+  // ==================== Question Bank ====================
+
+  /// GET /api/question-bank?grade=&subject=&topic=&difficulty=&limit=
+  static Future<List<Map<String, dynamic>>> fetchQuestionBank({
+    required int grade,
+    required String subject,
+    String? topic,
+    String? difficulty,
+    int limit = 30,
+  }) async {
+    final cookie = await _cookieHeader();
+    final params = <String, String>{
+      'grade': grade.toString(),
+      'subject': subject,
+      'limit': limit.toString(),
+    };
+    if (topic != null && topic.isNotEmpty) params['topic'] = topic;
+    if (difficulty != null && difficulty.isNotEmpty) params['difficulty'] = difficulty;
+    final uri = Uri.parse('$base/api/question-bank').replace(queryParameters: params);
+    final res = await http.get(
+      uri,
+      headers: {
+        if (cookie != null) 'Cookie': cookie,
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) return [];
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final items = data['items'] as List? ?? [];
+    return items.map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  // ==================== Practice ====================
+
+  /// POST /api/practice — submit an answer for a question-bank item.
+  /// Returns: { isCorrect, correctAnswer, explanation, hint, newlyAwarded }
+  static Future<Map<String, dynamic>> submitPractice({
+    required String questionBankId,
+    required String userAnswer,
+    int timeSpentSec = 0,
+  }) async {
+    final cookie = await _cookieHeader();
+    final res = await http.post(
+      Uri.parse('$base/api/practice'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (cookie != null) 'Cookie': cookie,
+      },
+      body: jsonEncode({
+        'questionBankId': questionBankId,
+        'userAnswer': userAnswer,
+        'timeSpentSec': timeSpentSec,
+      }),
+    ).timeout(const Duration(seconds: 15));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Could not submit answer');
+    }
+    return data;
+  }
+
+  // ==================== Progress ====================
+
+  /// GET /api/progress — student's progress summary
+  static Future<Map<String, dynamic>?> fetchProgress() async {
+    final cookie = await _cookieHeader();
+    final res = await http.get(
+      Uri.parse('$base/api/progress'),
+      headers: {
+        if (cookie != null) 'Cookie': cookie,
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) return null;
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // ==================== Parent Dashboard ====================
+
+  /// GET /api/parent — overview of linked children
+  static Future<List<Map<String, dynamic>>> fetchChildrenOverview() async {
+    final cookie = await _cookieHeader();
+    final res = await http.get(
+      Uri.parse('$base/api/parent'),
+      headers: {
+        if (cookie != null) 'Cookie': cookie,
+        'Accept': 'application/json',
+      },
+    ).timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) return [];
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final children = data['children'] as List? ?? [];
+    return children.map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  /// POST /api/parent/link — link a student by email
+  static Future<Map<String, dynamic>> linkStudent(String studentEmail) async {
+    final cookie = await _cookieHeader();
+    final res = await http.post(
+      Uri.parse('$base/api/parent/link'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (cookie != null) 'Cookie': cookie,
+      },
+      body: jsonEncode({'studentEmail': studentEmail}),
+    ).timeout(const Duration(seconds: 15));
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 }

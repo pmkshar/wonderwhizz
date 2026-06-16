@@ -1,66 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-
-export interface Subject {
-  id: string
-  label: string
-  emoji: string
-  description: string
-  gradient: string
-  examples: string[]
-}
-
-export const SUBJECTS: Subject[] = [
-  {
-    id: 'maths',
-    label: 'Maths',
-    emoji: '➗',
-    description: 'Algebra, geometry, arithmetic, trigonometry',
-    gradient: 'from-emerald-400 to-teal-500',
-    examples: [
-      'Solve: 2x + 5 = 17',
-      'Find the area of a circle with radius 7 cm',
-      'What is the LCM of 12 and 18?',
-    ],
-  },
-  {
-    id: 'hindi',
-    label: 'Hindi',
-    emoji: '📝',
-    description: 'व्याकरण, साहित्य, पद्य, गद्य',
-    gradient: 'from-orange-400 to-amber-500',
-    examples: [
-      'संधि के भेद उदाहरण सहित समझाइए',
-      '"राम पुस्तक पढ़ता है" में कारक पहचानिए',
-      'रस के प्रकार बताइए',
-    ],
-  },
-  {
-    id: 'science',
-    label: 'Science',
-    emoji: '🔬',
-    description: 'Physics, chemistry, biology',
-    gradient: 'from-cyan-400 to-sky-500',
-    examples: [
-      'Why is the sky blue?',
-      'Explain Newton\u2019s third law of motion',
-      'What is photosynthesis?',
-    ],
-  },
-  {
-    id: 'kannada',
-    label: 'Kannada',
-    emoji: '🦁',
-    description: 'ವ್ಯಾಕರಣ, ಸಾಹಿತ್ಯ, ಪದ್ಯ, ಗದ್ಯ',
-    gradient: 'from-rose-400 to-pink-500',
-    examples: [
-      'ಸಂಧಿಯ ಭೇದಗಳನ್ನು ಉದಾಹರಣೆಯೊಂದಿಗೆ ವಿವರಿಸಿ',
-      '"ನಾನು ಪುಸ್ತಕ ಓದುತ್ತೇನೆ" ಎಂಬ ವಾಕ್ಯದಲ್ಲಿ ಕಾರಕವನ್ನು ಗುರುತಿಸಿ',
-      'ರಸದ ಪ್ರಕಾರಗಳನ್ನು ತಿಳಿಸಿ',
-    ],
-  },
-]
+import { SUBJECTS } from '@/lib/subjects'
 
 interface Props {
   value: string
@@ -99,6 +40,11 @@ export function SubjectSelector({ value, onChange }: Props) {
             <div className="text-center text-[11px] leading-tight text-muted-foreground">
               {s.description}
             </div>
+            {s.hasTopics && (
+              <span className="mt-0.5 rounded-full bg-primary/10 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-primary">
+                8 topics
+              </span>
+            )}
             {active && (
               <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
             )}

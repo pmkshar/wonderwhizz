@@ -120,10 +120,21 @@ End with "Drumroll... Answer: <result>".`,
 }
 
 export const SUBJECT_CONTEXT: Record<string, string> = {
-  maths: `Subject: Mathematics (class 1 to 10). Topics: arithmetic, algebra, geometry, trigonometry, mensuration, statistics. Always show calculations clearly.`,
+  maths: `Subject: Mathematics (K-12). Topics: pre-algebra, algebra, geometry, trigonometry, calculus, statistics, linear algebra, word problems. Always show calculations clearly.`,
   hindi: `Subject: Hindi (भाषा व्याकरण, साहित्य). Topics: वर्णमाला, संधि, समास, अलंकार, रस, काव्य परिचय, पद्य और गद्य. हिंदी में समझाएं.`,
-  science: `Subject: Science (class 1 to 10). Topics: physics, chemistry, biology, environmental science. Use real-life examples.`,
+  science: `Subject: Science (K-12). Topics: physics, chemistry, biology, environmental science. Use real-life examples.`,
   kannada: `Subject: Kannada (ಕನ್ನಡ ಭಾಷೆ ಮತ್ತು ಸಾಹಿತ್ಯ). Topics: ವರ್ಣಮಾಲೆ, ಸಂಧಿ, ಸಮಾಸ, ಅಲಂಕಾರ, ರಸ, ಪದ್ಯ, ಗದ್ಯ. ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.`,
+}
+
+export const MATHS_TOPIC_CONTEXT: Record<string, string> = {
+  pre_algebra: `Maths topic: Pre-Algebra. Focus on factors, multiples, primes, fractions, decimals, ratios, percentages, exponents. Show every arithmetic step.`,
+  algebra: `Maths topic: Algebra. Focus on linear & quadratic equations, simplifying expressions, factoring polynomials, inequalities, functions. Show every algebraic manipulation.`,
+  geometry: `Maths topic: Geometry. Focus on area, perimeter, volume, angles, triangles, polygons, circles, Pythagoras, coordinate geometry. Include diagrams described in words.`,
+  trigonometry: `Maths topic: Trigonometry. Focus on sin/cos/tan ratios, identities, solving trig equations, heights & distances. Always specify units (degrees or radians).`,
+  calculus: `Maths topic: Calculus. Focus on limits, derivatives (power/product/chain/quotient rule), integrals (definite & indefinite). Show every differentiation/integration step.`,
+  statistics: `Maths topic: Statistics. Focus on mean, median, mode, range, variance, standard deviation, probability, distributions. Show the formula and substitution.`,
+  linear_algebra: `Maths topic: Linear Algebra. Focus on vectors, matrices, determinants, solving linear systems, eigenvalues. Show matrices in clear row-by-row format.`,
+  word_problems: `Maths topic: Word Problems. First translate the words into an equation, then solve step-by-step. Always state the final answer in a sentence.`,
 }
 
 export function buildTutorPrompt(opts: {
@@ -131,11 +142,17 @@ export function buildTutorPrompt(opts: {
   style: ExplanationStyleId
   grade: number
   question: string
+  topic?: string
 }): { role: 'system'; content: string } {
   const subjectCtx = SUBJECT_CONTEXT[opts.subject] ?? ''
+  const topicCtx =
+    opts.subject === 'maths' && opts.topic
+      ? MATHS_TOPIC_CONTEXT[opts.topic] ?? ''
+      : ''
   const stylePrompt = STYLE_PROMPTS[opts.style] ?? STYLE_PROMPTS.detailed
   const content = `${subjectCtx}
-Student class: ${opts.grade}
+${topicCtx}
+Student grade: ${opts.grade} (K-12 scale, 1=kindergarten, 12=high-school senior)
 
 Explanation style requested:
 ${stylePrompt}

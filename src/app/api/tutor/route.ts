@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     grade?: number
     question?: string
     language?: string
+    topic?: string
   }
 
   const subject = (body.subject ?? '').toLowerCase().trim()
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
   const question = (body.question ?? '').trim()
   const grade = typeof body.grade === 'number' ? body.grade : user.grade
   const language = (body.language ?? 'en').toLowerCase().trim()
+  const topic = (body.topic ?? '').trim() || null
 
   if (!VALID_SUBJECTS.has(subject)) {
     return NextResponse.json({ error: 'Please pick a subject.' }, { status: 400 })
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Question too long (max 4000 chars).' }, { status: 400 })
   }
 
-  const systemMessage = buildTutorPrompt({ subject, style, grade, question })
+  const systemMessage = buildTutorPrompt({ subject, style, grade, question, topic: topic ?? undefined })
   const languageInstruction = {
     role: 'system' as const,
     content: `The student wants the answer explained in this language: ${language}.
@@ -94,12 +96,15 @@ If English, write in clear simple English.`,
       data: {
         userId: user.id,
         subject,
+        topic,
         question,
         style,
         language,
         answer,
       },
     })
+    // Award "first question" achievement if eligible
+    await maybeAwardAchievement(user.id, 'first_question')
   } catch (err) {
     console.error('[tutor] failed to save question history', err)
   }
@@ -110,5 +115,6 @@ If English, write in clear simple English.`,
     style,
     language,
     grade,
+    topic,
   })
 }

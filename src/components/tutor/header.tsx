@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { LogOut, Smartphone, GraduationCap, ChevronDown } from 'lucide-react'
+import { LogOut, Smartphone, GraduationCap, ChevronDown, BarChart3, Users } from 'lucide-react'
 
 interface Props {
   user: {
@@ -33,13 +33,23 @@ interface Props {
     image?: string | null
     grade?: number | null
     provider?: string | null
+    role?: string | null
   }
   onGradeChange?: (grade: number) => void
   onOpenMobileApp?: () => void
+  onOpenProgress?: () => void
+  onOpenParent?: () => void
 }
 
-export function Header({ user, onGradeChange, onOpenMobileApp }: Props) {
+export function Header({
+  user,
+  onGradeChange,
+  onOpenMobileApp,
+  onOpenProgress,
+  onOpenParent,
+}: Props) {
   const [grade, setGrade] = useState<number>(user.grade ?? 8)
+  const isParent = user.role === 'parent'
 
   async function handleGradeChange(value: string) {
     const g = Number(value)
@@ -82,22 +92,54 @@ export function Header({ user, onGradeChange, onOpenMobileApp }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Grade selector */}
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
-            <Select value={String(grade)} onValueChange={handleGradeChange}>
-              <SelectTrigger className="h-9 w-[120px] gap-1" size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                  <SelectItem key={g} value={String(g)}>
-                    Class {g}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Grade selector (only for students) */}
+          {!isParent && (
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <GraduationCap className="h-4 w-4 text-muted-foreground" />
+              <Select value={String(grade)} onValueChange={handleGradeChange}>
+                <SelectTrigger className="h-9 w-[120px] gap-1" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                    <SelectItem key={g} value={String(g)}>
+                      Class {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Progress button (students only) */}
+          {!isParent && onOpenProgress && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenProgress}
+              className="gap-1.5"
+              title="View my progress"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Progress</span>
+            </Button>
+          )}
+
+          {/* Parent dashboard button (parents only) */}
+          {isParent && onOpenParent && (
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={onOpenParent}
+              className="gap-1.5"
+              title="Open parent dashboard"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">My Children</span>
+            </Button>
+          )}
 
           {onOpenMobileApp && (
             <Button
@@ -136,19 +178,37 @@ export function Header({ user, onGradeChange, onOpenMobileApp }: Props) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5 sm:hidden">
-                <Select value={String(grade)} onValueChange={handleGradeChange}>
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((g) => (
-                      <SelectItem key={g} value={String(g)}>
-                        Class {g}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isParent && (
+                  <Select value={String(grade)} onValueChange={handleGradeChange}>
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                        <SelectItem key={g} value={String(g)}>
+                          Class {g}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
+              {!isParent && onOpenProgress && (
+                <DropdownMenuItem
+                  onClick={onOpenProgress}
+                  className="cursor-pointer sm:hidden"
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" /> My Progress
+                </DropdownMenuItem>
+              )}
+              {isParent && onOpenParent && (
+                <DropdownMenuItem
+                  onClick={onOpenParent}
+                  className="cursor-pointer sm:hidden"
+                >
+                  <Users className="mr-2 h-4 w-4" /> My Children
+                </DropdownMenuItem>
+              )}
               {onOpenMobileApp && (
                 <DropdownMenuItem
                   onClick={onOpenMobileApp}

@@ -1,18 +1,33 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, Smartphone, Sparkles } from 'lucide-react'
+import {
+  Loader2,
+  Smartphone,
+  Sparkles,
+  Keyboard,
+} from 'lucide-react'
 import { Header } from './header'
-import { SubjectSelector, SUBJECTS } from './subject-selector'
-import { ExplanationStyleSelector, ExplanationStyleLegend } from './explanation-styles'
+import { SubjectSelector } from './subject-selector'
+import {
+  ExplanationStyleSelector,
+  ExplanationStyleLegend,
+} from './explanation-styles'
 import { QuestionInput } from './question-input'
 import { ExplanationResult } from './explanation-result'
 import { VoiceLanguagePicker } from './voice-language-picker'
 import { MobileAppDialog } from './mobile-app-dialog'
+import { MathKeyboard } from './math-keyboard'
+import { MathsTopicSelector } from './maths-topic-selector'
+import { QuestionBankBrowser } from './question-bank-browser'
+import { ProgressDashboard } from './progress-dashboard'
+import { ParentDashboard } from './parent-dashboard'
 import type { ExplanationStyleId } from '@/lib/explanation-prompts'
+import { SUBJECTS } from '@/lib/subjects'
 
 interface TutorDashboardProps {
   user: {
@@ -21,6 +36,7 @@ interface TutorDashboardProps {
     image?: string | null
     grade?: number | null
     provider?: string | null
+    role?: string | null
   }
 }
 
@@ -30,10 +46,13 @@ interface TutorResponse {
   style: ExplanationStyleId
   language: string
   grade: number
+  topic?: string | null
 }
 
 export function TutorDashboard({ user }: TutorDashboardProps) {
+  const isParent = user.role === 'parent'
   const [subject, setSubject] = useState<string>('maths')
+  const [topic, setTopic] = useState<string | null>(null)
   const [style, setStyle] = useState<ExplanationStyleId>('detailed')
   const [language, setLanguage] = useState<string>('en')
   const [grade, setGrade] = useState<number>(user.grade ?? 8)
@@ -41,9 +60,15 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<TutorResponse | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [progressOpen, setProgressOpen] = useState(false)
+  const [parentOpen, setParentOpen] = useState(false)
+  const [useMathKeyboard, setUseMathKeyboard] = useState(false)
 
-  // When subject changes, suggest a matching voice language
+  const subjectData = SUBJECTS.find((s) => s.id === subject)
+
+  // When subject changes, reset topic and suggest a matching voice language
   useEffect(() => {
+    setTopic(null)
     if (subject === 'hindi' && language === 'en') setLanguage('hi')
     if (subject === 'kannada' && language === 'en') setLanguage('kn')
   }, [subject, language])
@@ -59,7 +84,14 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
       const res = await fetch('/api/tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, style, grade, question, language }),
+        body: JSON.stringify({
+          subject,
+          style,
+          grade,
+          question,
+          language,
+          topic: subject === 'maths' ? topic : undefined,
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         answer?: string
@@ -74,6 +106,7 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
         style,
         language,
         grade,
+        topic: subject === 'maths' ? topic : null,
       })
       toast.success('Answer ready! 🎉')
     } catch (err) {
@@ -84,21 +117,84 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
     }
   }
 
+  // If parent, just show parent dashboard shortcut
+  if (isParent) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header
+          user={user}
+          onGradeChange={setGrade}
+          onOpenMobileApp={() => setMobileOpen(true)}
+          onOpenParent={() => setParentOpen(true)}
+        />
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+          <Card className="ww-shadow-card">
+            <CardContent className="flex flex-col items-center gap-4 p-10 text-center">
+              <div className="text-6xl">👨‍👩‍👧</div>
+              <h1 className="text-2xl font-bold">Welcome, Parent!</h1>
+              <p className="max-w-md text-sm text-muted-foreground">
+                You&apos;re signed in as a parent. Open the Parent Dashboard to
+                link your child&apos;s account and monitor their progress,
+                achievements, and learning activity.
+              </p>
+              <Button
+                size="lg"
+                onClick={() => setParentOpen(true)}
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" /> Open Parent Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </main>
+        <footer className="mt-auto border-t border-border/60 bg-muted/20">
+          <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-muted-foreground">
+            WonderWhiz · AI Tutor for Kids · Made with 💛
+          </div>
+        </footer>
+        <ParentDashboard
+          open={parentOpen}
+          onOpenChange={setParentOpen}
+          onSwitchToStudent={async () => {
+            // Switch back to student mode (parent can still switch back later)
+            await fetch('/api/user', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ role: 'student' }),
+            })
+            toast.success('Switched to student mode')
+            setTimeout(() => window.location.reload(), 500)
+          }}
+        />
+        <MobileAppDialog open={mobileOpen} onOpenChange={setMobileOpen} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header
         user={user}
         onGradeChange={setGrade}
         onOpenMobileApp={() => setMobileOpen(true)}
+        onOpenProgress={() => setProgressOpen(true)}
       />
 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-6">
-        {/* Welcome strip */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-orange-50 via-pink-50 to-violet-50 p-4 dark:from-orange-950/30 dark:via-pink-950/30 dark:to-violet-950/30">
+        {/* Welcome strip with progress shortcut */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-gradient-to-r from-orange-50 via-pink-50 to-violet-50 p-4 dark:from-orange-950/30 dark:via-pink-950/30 dark:to-violet-950/30"
+        >
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80 text-2xl shadow-sm dark:bg-zinc-900/80">
+            <motion.div
+              animate={{ rotate: [0, -8, 8, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 3 }}
+              className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/80 text-2xl shadow-sm dark:bg-zinc-900/80"
+            >
               👋
-            </div>
+            </motion.div>
             <div>
               <div className="text-sm font-semibold text-foreground">
                 Hi {user.name ?? user.email?.split('@')[0]}!
@@ -108,31 +204,109 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
               </div>
             </div>
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setMobileOpen(true)}
-            className="gap-1.5"
-          >
-            <Smartphone className="h-4 w-4" /> Get Mobile App
-          </Button>
-        </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setProgressOpen(true)}
+              className="gap-1.5"
+            >
+              📊 My Progress
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setMobileOpen(true)}
+              className="gap-1.5"
+            >
+              <Smartphone className="h-4 w-4" /> Mobile App
+            </Button>
+          </div>
+        </motion.div>
+
+        {/* Question bank shortcut */}
+        <QuestionBankBrowser
+          userGrade={grade}
+          onAskTutor={(q) => {
+            setQuestion(q)
+            toast.success('Question loaded into the input box — pick a style and ask!')
+          }}
+        />
 
         {/* Step 1: Subject */}
         <Section step={1} title="Pick a subject">
           <SubjectSelector value={subject} onChange={setSubject} />
         </Section>
 
-        {/* Step 2: Question */}
+        {/* Step 1.5: Maths topic (only for maths) */}
+        <AnimatePresence>
+          {subject === 'maths' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <Section
+                step={'1½' as never}
+                title="Pick a maths topic (optional)"
+                subtitle="Pre-Algebra · Algebra · Geometry · Trig · Calculus · Statistics · Linear Algebra · Word Problems"
+              >
+                <MathsTopicSelector value={topic} onChange={setTopic} />
+              </Section>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Step 2: Question with optional math keyboard */}
         <Section step={2} title="Ask your question">
-          <QuestionInput
-            subject={subject}
-            value={question}
-            onChange={setQuestion}
-            onSubmit={handleAsk}
-            loading={loading}
-          />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold text-foreground">
+                ✍️ Type your question
+              </label>
+              <div className="flex items-center gap-2">
+                {subject === 'maths' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={useMathKeyboard ? 'default' : 'outline'}
+                    onClick={() => setUseMathKeyboard((v) => !v)}
+                    className="gap-1.5"
+                  >
+                    <Keyboard className="h-3.5 w-3.5" />
+                    {useMathKeyboard ? 'Math keyboard on' : 'Math keyboard'}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {useMathKeyboard && subject === 'maths' ? (
+              <MathKeyboard
+                value={question}
+                onChange={setQuestion}
+                onSubmit={handleAsk}
+                placeholder="Use the math keyboard to type equations, integrals, trig..."
+                rows={4}
+                disabled={loading}
+              />
+            ) : (
+              <QuestionInput
+                subject={subject}
+                value={question}
+                onChange={setQuestion}
+                onSubmit={handleAsk}
+                loading={loading}
+              />
+            )}
+
+            {topic && (
+              <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-primary">
+                Focused on: <strong>{topic.replace('_', ' ')}</strong>
+              </div>
+            )}
+          </div>
         </Section>
 
         {/* Step 3: Explanation style */}
@@ -172,25 +346,43 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
         </div>
 
         {/* Result */}
-        {loading && !result && (
-          <ExplanationResult
-            answer=""
-            subject={subject}
-            style={style}
-            language={language}
-            loading
-          />
-        )}
-        {result && (
-          <ExplanationResult
-            answer={result.answer}
-            subject={result.subject}
-            style={result.style}
-            language={result.language}
-            loading={false}
-            onRegenerate={handleAsk}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {loading && !result && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <ExplanationResult
+                answer=""
+                subject={subject}
+                style={style}
+                language={language}
+                topic={topic}
+                loading
+              />
+            </motion.div>
+          )}
+          {result && (
+            <motion.div
+              key="result"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <ExplanationResult
+                answer={result.answer}
+                subject={result.subject}
+                style={result.style}
+                language={result.language}
+                topic={result.topic ?? null}
+                loading={false}
+                onRegenerate={handleAsk}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {!result && !loading && (
           <Card className="border-dashed bg-muted/20">
@@ -236,6 +428,7 @@ export function TutorDashboard({ user }: TutorDashboardProps) {
       </footer>
 
       <MobileAppDialog open={mobileOpen} onOpenChange={setMobileOpen} />
+      <ProgressDashboard open={progressOpen} onOpenChange={setProgressOpen} />
     </div>
   )
 }
@@ -246,7 +439,7 @@ function Section({
   subtitle,
   children,
 }: {
-  step: number
+  step: number | string
   title: string
   subtitle?: string
   children: React.ReactNode
