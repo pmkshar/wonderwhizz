@@ -1,0 +1,53 @@
+name: wonderwhiz
+description: "WonderWhiz — AI Tutor Bot for Kids (Maths, Hindi, Science, Kannada) with 8 explanation styles and multi-language voice-over."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Material icons
+  cupertino_icons: ^1.0.6
+
+  # HTTP client for /api/tutor and /api/tts
+  http: ^1.2.0
+
+  # Local storage for token + last answer
+  shared_preferences: ^2.2.2
+
+  # Google sign-in
+  google_sign_in: ^6.2.1
+
+  # Audio playback for TTS wav
+  audioplayers: ^5.2.1
+
+  # Markdown rendering for the AI answer
+  flutter_markdown: ^0.6.21
+
+  # Syntax highlighting for code blocks
+  flutter_highlighter: ^0.1.1
+
+  # URL launcher (for opening build instructions)
+  url_launcher: ^6.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: Nunito
+      fonts:
+        - asset: fonts/Nunito-Regular.ttf
+        - asset: fonts/Nunito-Bold.ttf
+          weight: 700
+        - asset: fonts/Nunito-ExtraBold.ttf
+          weight: 800
