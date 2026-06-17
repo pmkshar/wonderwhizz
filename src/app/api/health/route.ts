@@ -38,7 +38,6 @@ export async function GET() {
     },
     db: {
       ok: dbOk,
-      provider: 'sqlite',
       urlScheme: (process.env.DATABASE_URL ?? '').split(':')[0] || null,
       error: dbError,
     },

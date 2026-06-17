@@ -1,6 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
-import { createClient } from '@libsql/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -9,38 +7,27 @@ const globalForPrisma = globalThis as unknown as {
 const isProd = process.env.NODE_ENV === 'production'
 
 /**
- * Lazy Prisma client with libSQL adapter support.
+ * Lazy Prisma client.
  *
  * We can't construct `new PrismaClient()` at module-load time because Next.js
  * evaluates modules during `next build` to prerender static pages — and at
- * build time `DATABASE_URL` is often missing or invalid. Constructing eagerly
- * made `next build` throw `TypeError: Invalid URL` from the Prisma engine.
+ * build time `DATABASE_URL` is often missing or invalid (e.g. on Vercel where
+ * the live DB URL is only injected at runtime). Constructing eagerly made
+ * `next build` throw `TypeError: Invalid URL` from the Prisma engine.
  *
- * When DATABASE_URL starts with `libsql:` (Turso / libSQL), we use the
- * `@prisma/adapter-libsql` driver adapter — this is what makes the existing
- * `provider = "sqlite"` Prisma schema work against a remote libSQL server.
- * For `file:` URLs (local dev), Prisma's built-in SQLite engine is used
- * directly (no adapter needed).
+ * Instead, we expose a Proxy that defers construction until the first time
+ * any property is accessed. Static prerender never touches the DB, so the
+ * client is never built during the build phase.
+ *
+ * The Prisma schema uses `provider = "postgresql"` and the URL passed in
+ * `DATABASE_URL` (Postgres in production via Neon, or a `file:` URL for local
+ * SQLite dev — actually we now use Postgres for both, but Prisma's engine
+ * auto-detects based on URL scheme).
  */
 function createPrismaClient(): PrismaClient {
-  const dbUrl = process.env.DATABASE_URL ?? ''
-  const log = isProd ? ['error', 'warn'] : ['query', 'error', 'warn']
-
-  if (dbUrl.startsWith('libsql:') || dbUrl.startsWith('http:') || dbUrl.startsWith('https:')) {
-    // Turso / libSQL — use the driver adapter
-    const libsql = createClient({
-      url: dbUrl,
-      // authToken can also be embedded in the URL as ?authToken=...,
-      // which is how we set it on Vercel. Passing it explicitly here is
-      // a safety net for users who set TURSO_AUTH_TOKEN separately.
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    })
-    const adapter = new PrismaLibSQL(libsql)
-    return new PrismaClient({ log, adapter })
-  }
-
-  // Local SQLite file — use Prisma's built-in engine
-  return new PrismaClient({ log })
+  return new PrismaClient({
+    log: isProd ? ['error', 'warn'] : ['query', 'error', 'warn'],
+  })
 }
 
 function getPrisma(): PrismaClient {
