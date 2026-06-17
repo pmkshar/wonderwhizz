@@ -7,10 +7,15 @@ import { db } from '@/lib/db'
  */
 export async function GET() {
   const googleConfigured =
-    !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET
+    !!process.env.GOOGLE_CLIENT_ID?.trim() &&
+    !!process.env.GOOGLE_CLIENT_SECRET?.trim()
 
+  // Treat empty-string env vars as "not set" (Vercel sometimes ships them
+  // that way during the first build before the user has filled them in).
   const nextauthUrl =
-    process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? null
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
 
   // Probe the DB so we surface connection issues early.
   let dbOk = false
@@ -29,7 +34,7 @@ export async function GET() {
       googleConfigured,
       nextauthUrl,
       // mask the secret so we can confirm it's set without leaking it
-      nextauthSecretSet: !!process.env.NEXTAUTH_SECRET,
+      nextauthSecretSet: !!process.env.NEXTAUTH_SECRET?.trim(),
     },
     db: {
       ok: dbOk,
@@ -39,3 +44,4 @@ export async function GET() {
     },
   })
 }
+

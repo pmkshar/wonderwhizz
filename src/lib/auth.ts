@@ -1,7 +1,29 @@
+import '@/lib/env-guard' // must run before next-auth imports (cleans empty env strings)
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { db } from '@/lib/db'
 import { verifyPassword } from '@/lib/password'
+
+// Defensive env access: Vercel marks env vars as "sensitive" and they can
+// occasionally arrive as empty strings (especially NEXTAUTH_URL during the
+// very first build). Treat empty strings as "unset" so downstream code can
+// fall back to defaults instead of crashing.
+const env = (key: string): string | undefined => {
+  const v = process.env[key]
+  return v && v.length > 0 ? v : undefined
+}
+
+// Resolve the canonical site URL once. Order of preference:
+//   1. NEXTAUTH_URL (explicit)
+//   2. NEXT_PUBLIC_SITE_URL (alternative some hosts set)
+//   3. VERCEL_URL (auto-set by Vercel on every deploy, no scheme)
+//   4. http://localhost:3000 (local dev)
+function resolveSiteUrl(): string {
+  if (env('NEXTAUTH_URL')) return env('NEXTAUTH_URL')!
+  if (env('NEXT_PUBLIC_SITE_URL')) return env('NEXT_PUBLIC_SITE_URL')!
+  if (env('VERCEL_URL')) return `https://${env('VERCEL_URL')}`
+  return 'http://localhost:3000'
+}
 
 // Only register Google provider when env vars are actually set.
 // This prevents the "client_id is required" crash when users click
@@ -31,14 +53,14 @@ function buildProviders() {
     }),
   ]
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  if (env('GOOGLE_CLIENT_ID') && env('GOOGLE_CLIENT_SECRET')) {
     // Lazy import so the openid-client lib is only loaded when needed.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const GoogleProvider = require('next-auth/providers/google').default
     providers.push(
       GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        clientId: env('GOOGLE_CLIENT_ID')!,
+        clientSecret: env('GOOGLE_CLIENT_SECRET')!,
         allowDangerousEmailAccountLinking: true,
       })
     )
@@ -82,5 +104,19 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-  secret: process.env.NEXTAUTH_SECRET ?? 'dev-secret-change-me-in-production',
+  secret: env('NEXTAUTH_SECRET') ?? 'dev-secret-change-me-in-production',
 }
+
+// On Vercel, VERCEL_URL is auto-injected on every deployment. If the user
+// hasn't explicitly set NEXTAUTH_URL, we promote VERCEL_URL to NEXTAUTH_URL
+// at module-load time. This prevents next-auth's parseUrl() from receiving
+// an empty string during `next build` static prerender (which would throw
+// `TypeError: Invalid URL { input: '' }`).
+//
+// We do this AFTER authOptions is defined so we don't affect the
+// `secret` resolution above.
+if (!env('NEXTAUTH_URL') && env('VERCEL_URL')) {
+  process.env.NEXTAUTH_URL = `https://${env('VERCEL_URL')}`
+}
+
+

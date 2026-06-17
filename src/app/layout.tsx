@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@/lib/env-guard"; // must run before any module that touches env vars
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
