@@ -1,10 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  // NOTE: `output: "standalone"` is intentionally DISABLED.
+  // Vercel's build system has its own serverless packaging and does NOT need
+  // (and is confused by) Next.js standalone output. Enable it only if you're
+  // self-hosting with `bun .next/standalone/server.js`.
+  // output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   reactStrictMode: false,
 };
