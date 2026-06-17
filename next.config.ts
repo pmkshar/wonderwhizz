@@ -9,9 +9,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Next.js 16 removed the `eslint` config key. Lint errors no longer fail
+  // production builds by default; remove the deprecated key.
   reactStrictMode: false,
 };
 
