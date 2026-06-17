@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +44,9 @@ export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState<'local' | 'google' | 'reset' | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
+  // Whether the Google OAuth provider is actually configured on the server.
+  // If not, we hide the button instead of letting users hit a crash.
+  const [googleReady, setGoogleReady] = useState<boolean | null>(null)
 
   // login form
   const [loginEmail, setLoginEmail] = useState('')
@@ -61,6 +64,29 @@ export function AuthScreen() {
   const [regGrade, setRegGrade] = useState<number>(8)
   const [regRole, setRegRole] = useState<'student' | 'parent'>('student')
 
+  // Probe the server once on mount so we can decide whether to show
+  // "Continue with Google" and surface a friendly warning if the DB is down.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/health', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data: { auth?: { googleConfigured?: boolean }; ok?: boolean }) => {
+        if (cancelled) return
+        setGoogleReady(!!data.auth?.googleConfigured)
+        if (data.ok === false) {
+          toast.error(
+            'The server database is not reachable. Sign-in may fail. Please try again later.'
+          )
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleReady(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     if (!loginEmail || !loginPassword) {
@@ -68,18 +94,32 @@ export function AuthScreen() {
       return
     }
     setLoading('local')
-    const res = await signIn('credentials', {
-      email: loginEmail,
-      password: loginPassword,
-      redirect: false,
-    })
-    setLoading(null)
-    if (res?.error) {
-      toast.error('Wrong email or password. Try again.')
-      return
+    try {
+      const res = await signIn('credentials', {
+        email: loginEmail,
+        password: loginPassword,
+        redirect: false,
+      })
+      if (!res || res.error) {
+        toast.error('Wrong email or password. Try again or use "Forgot password?".')
+        return
+      }
+      // Force the client session to refresh *before* we tell the router to
+      // re-render, otherwise useSession() on the home page can lag and the
+      // user sees the login screen again for a tick.
+      await getSession()
+      toast.success('Welcome back! 🎉')
+      router.refresh()
+      // Hard refresh as a safety net so the post-login layout always mounts.
+      if (typeof window !== 'undefined') {
+        window.location.href = window.location.origin + '/'
+      }
+    } catch (err) {
+      console.error('sign-in error', err)
+      toast.error('Something went wrong during sign-in. Please try again.')
+    } finally {
+      setLoading(null)
     }
-    toast.success('Welcome back! 🎉')
-    router.refresh()
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -118,8 +158,12 @@ export function AuthScreen() {
         setLoginPassword('')
         return
       }
+      await getSession()
       toast.success('Welcome to WonderWhiz! 🌟')
       router.refresh()
+      if (typeof window !== 'undefined') {
+        window.location.href = window.location.origin + '/'
+      }
     } catch {
       toast.error('Something went wrong. Please try again.')
     } finally {
@@ -128,9 +172,19 @@ export function AuthScreen() {
   }
 
   async function handleGoogle() {
+    if (googleReady === false) {
+      toast.error('Google sign-in is not configured on this server yet.')
+      return
+    }
     setLoading('google')
-    await signIn('google', { callbackUrl: '/' })
-    // page will redirect
+    try {
+      await signIn('google', { callbackUrl: '/' })
+    } catch (err) {
+      console.error('google sign-in error', err)
+      toast.error('Google sign-in failed. Please try email/password.')
+      setLoading(null)
+    }
+    // page will redirect on success
   }
 
   async function handleResetPassword(e: React.FormEvent) {
@@ -289,8 +343,12 @@ export function AuthScreen() {
                     </Button>
                   </form>
 
-                  <Divider />
-                  <GoogleButton onClick={handleGoogle} loading={loading === 'google'} />
+                  {googleReady && (
+                    <>
+                      <Divider />
+                      <GoogleButton onClick={handleGoogle} loading={loading === 'google'} />
+                    </>
+                  )}
                 </TabsContent>
 
                 {/* REGISTER */}
@@ -413,8 +471,12 @@ export function AuthScreen() {
                     </Button>
                   </form>
 
-                  <Divider />
-                  <GoogleButton onClick={handleGoogle} loading={loading === 'google'} />
+                  {googleReady && (
+                    <>
+                      <Divider />
+                      <GoogleButton onClick={handleGoogle} loading={loading === 'google'} />
+                    </>
+                  )}
                 </TabsContent>
               </Tabs>
             </CardContent>

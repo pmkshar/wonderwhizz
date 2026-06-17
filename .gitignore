@@ -32,9 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# local SQLite databases — should never be committed
+db/*.db
+db/*.db-journal
+db/*.db-shm
+db/*.db-wal
 
 
 # typescript
@@ -52,3 +59,6 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Tool/exploration artifacts
+tool-results/

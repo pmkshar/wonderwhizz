@@ -1,11 +1,13 @@
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import GoogleProvider from 'next-auth/providers/google'
 import { db } from '@/lib/db'
 import { verifyPassword } from '@/lib/password'
 
-export const authOptions: NextAuthOptions = {
-  providers: [
+// Only register Google provider when env vars are actually set.
+// This prevents the "client_id is required" crash when users click
+// "Continue with Google" on a deployment that hasn't configured OAuth.
+function buildProviders() {
+  const providers = [
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
@@ -27,12 +29,26 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      allowDangerousEmailAccountLinking: true,
-    }),
-  ],
+  ]
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    // Lazy import so the openid-client lib is only loaded when needed.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const GoogleProvider = require('next-auth/providers/google').default
+    providers.push(
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        allowDangerousEmailAccountLinking: true,
+      })
+    )
+  }
+
+  return providers
+}
+
+export const authOptions: NextAuthOptions = {
+  providers: buildProviders(),
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   pages: { signIn: '/' },
   callbacks: {
