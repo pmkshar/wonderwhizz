@@ -4,11 +4,8 @@ import { hashPassword } from '@/lib/password'
 import { z } from 'zod'
 
 const schema = z.object({
-  name: z.string().min(1).max(80),
   email: z.string().email(),
   password: z.string().min(6).max(128),
-  grade: z.number().int().min(1).max(12).optional(),
-  role: z.enum(['student', 'parent']).optional(),
 })
 
 export async function POST(req: Request) {
@@ -25,28 +22,23 @@ export async function POST(req: Request) {
       { status: 400 }
     )
   }
-  const { name, email, password, grade, role } = parsed.data
+  const { email, password } = parsed.data
   const normalizedEmail = email.toLowerCase().trim()
-  const existing = await db.user.findUnique({ where: { email: normalizedEmail } })
-  if (existing) {
+  const user = await db.user.findUnique({ where: { email: normalizedEmail } })
+  if (!user) {
+    // For privacy, we still return ok to avoid leaking which emails are registered.
+    return NextResponse.json({ ok: true })
+  }
+  if (user.provider === 'google' && !user.passwordHash) {
     return NextResponse.json(
-      { error: 'An account with this email already exists. Please log in.' },
-      { status: 409 }
+      { error: 'This account uses Google sign-in. Please use "Continue with Google".' },
+      { status: 400 }
     )
   }
   const passwordHash = await hashPassword(password)
-  const user = await db.user.create({
-    data: {
-      name,
-      email: normalizedEmail,
-      passwordHash,
-      provider: 'credentials',
-      grade: grade ?? 8,
-      role: role ?? 'student',
-    },
+  await db.user.update({
+    where: { id: user.id },
+    data: { passwordHash },
   })
-  return NextResponse.json({
-    ok: true,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
-  })
+  return NextResponse.json({ ok: true })
 }

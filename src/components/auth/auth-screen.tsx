@@ -9,7 +9,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, Mail, Lock, User, Sparkles, GraduationCap, Users } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
+  Loader2,
+  Mail,
+  Lock,
+  User,
+  Sparkles,
+  GraduationCap,
+  Users,
+  KeyRound,
+  Smartphone,
+  Apple,
+  Download,
+  ArrowLeft,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const SUBJECTS = [
@@ -22,11 +42,17 @@ const SUBJECTS = [
 export function AuthScreen() {
   const router = useRouter()
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [loading, setLoading] = useState<'local' | 'google' | null>(null)
+  const [loading, setLoading] = useState<'local' | 'google' | 'reset' | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
 
   // login form
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+
+  // reset password form
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetConfirm, setResetConfirm] = useState('')
 
   // register form
   const [regName, setRegName] = useState('')
@@ -107,6 +133,46 @@ export function AuthScreen() {
     // page will redirect
   }
 
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!resetEmail || resetPassword.length < 6) {
+      toast.error('Enter your email and a new password (6+ characters).')
+      return
+    }
+    if (resetPassword !== resetConfirm) {
+      toast.error('Passwords do not match.')
+      return
+    }
+    setLoading('reset')
+    try {
+      const res = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, password: resetPassword }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        ok?: boolean
+      }
+      if (!res.ok) {
+        toast.error(data.error ?? 'Could not reset password.')
+        return
+      }
+      toast.success('Password reset! You can now log in with your new password.')
+      setResetOpen(false)
+      setLoginEmail(resetEmail)
+      setLoginPassword('')
+      setResetEmail('')
+      setResetPassword('')
+      setResetConfirm('')
+      setMode('login')
+    } catch {
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setLoading(null)
+    }
+  }
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Decorative background */}
@@ -126,9 +192,9 @@ export function AuthScreen() {
             Meet <span className="ww-gradient-text">WonderWhiz</span> — your friendly AI tutor.
           </h1>
           <p className="mx-auto max-w-xl text-base text-muted-foreground sm:text-lg lg:mx-0">
-            Ask questions in <strong>Maths, Hindi, Science, or Kannada</strong> and pick how you want
-            the answer explained — step-by-step, quick, intuitive, with tips, visually, with logic,
-            as code, or even with jokes! Plus voice-over in 3 languages. 🎧
+            Ask questions in <strong>Maths, Hindi, Science, or Kannada</strong> and pick how you
+            want the answer explained — step-by-step, quick, intuitive, with tips, visually, with
+            logic, as code, or even with jokes! Plus voice-over in 3 languages. 🎧
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
             {SUBJECTS.map((s) => (
@@ -181,7 +247,19 @@ export function AuthScreen() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="login-password">Password</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="login-password">Password</Label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResetEmail(loginEmail)
+                            setResetOpen(true)
+                          }}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -316,9 +394,8 @@ export function AuthScreen() {
                     )}
                     {regRole === 'parent' && (
                       <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
-                        💡 As a parent, you can link your child&apos;s account after
-                        signing in to monitor their progress, accuracy, and
-                        achievements.
+                        💡 As a parent, you can link your child&apos;s account after signing in to
+                        monitor their progress, accuracy, and achievements.
                       </div>
                     )}
                     <Button
@@ -343,10 +420,199 @@ export function AuthScreen() {
             </CardContent>
           </Card>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            By continuing you agree to use WonderWhiz responsibly. Parents, please supervise kids under 13.
+            By continuing you agree to use WonderWhiz responsibly. Parents, please supervise kids
+            under 13.
           </p>
+
+          {/* Mobile app download */}
+          <MobileAppDownload />
         </div>
       </div>
+
+      {/* Reset password dialog */}
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              Reset your password
+            </DialogTitle>
+            <DialogDescription>
+              Enter your account email and choose a new password (min 6 characters). You can sign
+              in immediately after.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="reset-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className="pl-9"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-password">New password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="reset-password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  className="pl-9"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reset-confirm">Confirm new password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="reset-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  className="pl-9"
+                  value={resetConfirm}
+                  onChange={(e) => setResetConfirm(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setResetOpen(false)}
+                disabled={loading === 'reset'}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Cancel
+              </Button>
+              <Button type="submit" disabled={loading === 'reset'}>
+                {loading === 'reset' ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Resetting...
+                  </>
+                ) : (
+                  <>Reset password</>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function MobileAppDownload() {
+  const [showHelp, setShowHelp] = useState(false)
+  return (
+    <div className="mt-6 rounded-xl border border-dashed border-border bg-muted/30 p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Smartphone className="h-4 w-4 text-primary" />
+        Get the WonderWhiz mobile app
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Learn on the go — the same login works on every device.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <a
+          href="/wonderwhiz-flutter-source.zip"
+          download
+          className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-green-500/10 text-green-600">
+            <Smartphone className="h-4 w-4" />
+          </span>
+          <span className="flex flex-col">
+            <span>Android (APK)</span>
+            <span className="text-[10px] text-muted-foreground">Flutter source + build</span>
+          </span>
+          <Download className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
+        </a>
+        <a
+          href="/wonderwhiz-flutter-source.zip"
+          download
+          className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium transition-all hover:border-primary/40 hover:bg-primary/5"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-500/10 text-zinc-700">
+            <Apple className="h-4 w-4" />
+          </span>
+          <span className="flex flex-col">
+            <span>iOS (IPA)</span>
+            <span className="text-[10px] text-muted-foreground">Flutter source + build</span>
+          </span>
+          <Download className="ml-auto h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
+        </a>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowHelp((v) => !v)}
+        className="mt-2 text-xs font-medium text-primary hover:underline"
+      >
+        {showHelp ? 'Hide build instructions' : 'How do I install the app?'}
+      </button>
+      {showHelp && (
+        <div className="mt-2 space-y-2 rounded-lg bg-background/60 p-3 text-xs text-muted-foreground">
+          <p>
+            <strong>Why source code?</strong> Apple and Google require developer accounts
+            ($25/$99/yr) to publish installable apps. We give you the full source so you can build
+            and install on your own device for free.
+          </p>
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>Download &amp; unzip the Flutter source above.</li>
+            <li>
+              Install Flutter SDK from <span className="font-medium">flutter.dev</span>.
+            </li>
+            <li>
+              Open <code className="rounded bg-muted px-1">lib/api.dart</code> and set{' '}
+              <code className="rounded bg-muted px-1">baseUrl</code> to this website&apos;s URL.
+            </li>
+            <li>
+              <strong>Android:</strong> run{' '}
+              <code className="rounded bg-muted px-1">flutter build apk --release</code> and
+              sideload the APK.
+            </li>
+            <li>
+              <strong>iOS:</strong> run{' '}
+              <code className="rounded bg-muted px-1">flutter build ipa --release</code> and install
+              via Xcode (a free Apple ID works for personal devices).
+            </li>
+          </ol>
+          <p className="pt-1">
+            <strong>Prefer not to build?</strong> You can also{' '}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== 'undefined' && navigator.share) {
+                  navigator
+                    .share({ title: 'WonderWhiz', url: window.location.href })
+                    .catch(() => {})
+                } else {
+                  navigator.clipboard?.writeText(window.location.href).catch(() => {})
+                }
+              }}
+              className="font-medium text-primary hover:underline"
+            >
+              install this website as an app
+            </button>{' '}
+            — open it in Chrome / Safari, tap the menu, and choose “Add to Home Screen”.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
