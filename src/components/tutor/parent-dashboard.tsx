@@ -78,6 +78,28 @@ interface Props {
 }
 
 export function ParentDashboard({ open, onOpenChange, onSwitchToStudent }: Props) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            👨‍👩‍👧 Parent Dashboard
+          </DialogTitle>
+          <DialogDescription>
+            Monitor your child&apos;s learning progress, achievements, and activity.
+          </DialogDescription>
+        </DialogHeader>
+        <ParentDashboardBody onSwitchToStudent={onSwitchToStudent} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function ParentDashboardBody({
+  onSwitchToStudent,
+}: {
+  onSwitchToStudent: () => void
+}) {
   const [children, setChildren] = useState<ChildSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [linkEmail, setLinkEmail] = useState('')
@@ -105,8 +127,8 @@ export function ParentDashboard({ open, onOpenChange, onSwitchToStudent }: Props
   }
 
   useEffect(() => {
-    if (open) loadChildren()
-  }, [open])
+    loadChildren()
+  }, [])
 
   async function linkStudent() {
     if (!linkEmail.trim()) {
@@ -145,18 +167,8 @@ export function ParentDashboard({ open, onOpenChange, onSwitchToStudent }: Props
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            👨‍👩‍👧 Parent Dashboard
-          </DialogTitle>
-          <DialogDescription>
-            Monitor your child&apos;s learning progress, achievements, and activity.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Link child */}
+    <>
+      {/* Link child */}
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end">
             <div className="flex-1 space-y-1.5">
@@ -406,8 +418,7 @@ export function ParentDashboard({ open, onOpenChange, onSwitchToStudent }: Props
             <Link2 className="h-4 w-4" /> Refresh
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+    </>
   )
 }
 

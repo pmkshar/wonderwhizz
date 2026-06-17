@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { AuthScreen } from '@/components/auth/auth-screen'
-import { TutorDashboard } from '@/components/tutor/tutor-dashboard'
+import { AppShell } from '@/components/tutor/app-shell'
 import { Loader2 } from 'lucide-react'
 
 interface AppUser {
@@ -13,6 +13,7 @@ interface AppUser {
   image?: string | null
   grade?: number | null
   provider?: string | null
+  role?: string | null
 }
 
 export default function Home() {
@@ -66,5 +67,6 @@ export default function Home() {
     return <AuthScreen />
   }
 
-  return <TutorDashboard user={user} />
+  return <AppShell user={user} />
 }
+
