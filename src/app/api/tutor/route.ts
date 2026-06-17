@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import ZAI from 'z-ai-web-dev-sdk'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { ensureZaiConfig } from '@/lib/zai-config'
 import {
   buildTutorPrompt,
   EXPLANATION_STYLES,
@@ -63,6 +64,7 @@ If English, write in clear simple English.`,
 
   let answer: string
   try {
+    await ensureZaiConfig()
     const zai = await ZAI.create()
     const completion = await zai.chat.completions.create({
       messages: [

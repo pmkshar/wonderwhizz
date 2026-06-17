@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import ZAI from 'z-ai-web-dev-sdk'
 import { authOptions } from '@/lib/auth'
+import { ensureZaiConfig } from '@/lib/zai-config'
 
 // Cap TTS input to keep responses fast
 const MAX_TTS_CHARS = 1200
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
   const truncated = text.slice(0, MAX_TTS_CHARS)
 
   try {
+    await ensureZaiConfig()
     const zai = await ZAI.create()
     const response = await zai.audio.tts.create({
       input: truncated,
