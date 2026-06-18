@@ -18,6 +18,7 @@ import {
   Copy,
   Check,
   RefreshCw,
+  BookOpen,
 } from 'lucide-react'
 import {
   ExplanationStyleSelector,
@@ -25,6 +26,7 @@ import {
 import { VoiceLanguagePicker } from '../voice-language-picker'
 import { MathKeyboard } from '../math-keyboard'
 import { MathsTopicSelector } from '../maths-topic-selector'
+import { SyllabusPicker } from '../syllabus-picker'
 import { Markdown } from '@/components/markdown/markdown'
 import { VoicePlayer } from '../voice-player'
 import {
@@ -32,6 +34,7 @@ import {
   type ExplanationStyleId,
 } from '@/lib/explanation-prompts'
 import { SUBJECTS, getMathsTopic } from '@/lib/subjects'
+import { describeSyllabusContext, getBoard, getChapter } from '@/lib/syllabus'
 
 interface AskPageProps {
   user: {
@@ -53,6 +56,9 @@ interface ChatTurn {
   language: string
   grade: number
   topic?: string | null
+  boardId?: string | null
+  chapterId?: string | null
+  chapterTitle?: string | null
   provider?: string
   loading?: boolean
   error?: string
@@ -68,6 +74,9 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [useMathKeyboard, setUseMathKeyboard] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  // Syllabus + chapter context (kept across turns so the tutor remembers)
+  const [boardId, setBoardId] = useState<string | null>(null)
+  const [chapterId, setChapterId] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -89,6 +98,14 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
     if (subject === 'kannada' && language === 'en') setLanguage('kn')
   }, [subject, language])
 
+  // When the subject changes, re-validate the chapter against the new subject's
+  // chapter list. If the new subject doesn't have the selected chapter, clear it.
+  useEffect(() => {
+    if (!boardId || !chapterId) return
+    const ch = getChapter(boardId, subject, grade, chapterId)
+    if (!ch) setChapterId(null)
+  }, [subject, grade, boardId, chapterId])
+
   // Auto-scroll to bottom when a new turn is added or its answer streams in
   useEffect(() => {
     const el = scrollRef.current
@@ -104,6 +121,13 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
     }
 
     const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    // Resolve chapter title up-front for display in the turn bubble header
+    let chapterTitle: string | null = null
+    if (boardId && chapterId) {
+      const ch = getChapter(boardId, subject, grade, chapterId)
+      if (ch) chapterTitle = ch.title
+    }
+
     const newTurn: ChatTurn = {
       id: turnId,
       question: question.trim(),
@@ -113,6 +137,9 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
       language,
       grade,
       topic: subject === 'maths' ? topic : null,
+      boardId,
+      chapterId,
+      chapterTitle,
       loading: true,
     }
 
@@ -139,6 +166,8 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           question: newTurn.question,
           language,
           topic: subject === 'maths' ? topic : undefined,
+          boardId: boardId ?? undefined,
+          chapterId: chapterId ?? undefined,
           history,
         }),
       })
@@ -203,6 +232,8 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           question: turn.question,
           language: turn.language,
           topic: turn.topic ?? undefined,
+          boardId: turn.boardId ?? undefined,
+          chapterId: turn.chapterId ?? undefined,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as {
@@ -247,6 +278,9 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 
   const subjectData = SUBJECTS.find((s) => s.id === subject)
   const styleData = EXPLANATION_STYLES.find((s) => s.id === style)
+  const boardData = boardId ? getBoard(boardId) : undefined
+  const chapterData =
+    boardId && chapterId ? getChapter(boardId, subject, grade, chapterId) : undefined
 
   return (
     <div className="flex h-[calc(100vh-9rem)] flex-col gap-3 sm:h-[calc(100vh-7rem)]">
@@ -274,6 +308,17 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           })}
         </div>
         <div className="flex items-center gap-1.5">
+          {boardData && (
+            <Badge variant="outline" className="hidden sm:inline-flex gap-1 px-2 py-0.5 text-[10px]">
+              <BookOpen className="h-2.5 w-2.5" />
+              {boardData.shortLabel}·{grade}
+            </Badge>
+          )}
+          {chapterData && (
+            <Badge variant="outline" className="hidden md:inline-flex gap-1 px-2 py-0.5 text-[10px] max-w-[180px]">
+              <span className="truncate">Ch{chapterData.number}: {chapterData.title}</span>
+            </Badge>
+          )}
           <Badge variant="outline" className="hidden sm:inline-flex gap-1 px-2 py-0.5 text-[10px]">
             <span>{styleData?.emoji}</span>
             {styleData?.short}
@@ -317,7 +362,12 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
               className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-card shadow-2xl"
             >
               <div className="flex items-center justify-between border-b border-border/60 p-4">
-                <h3 className="text-base font-bold">Tutor options</h3>
+                <div>
+                  <h3 className="text-base font-bold">Tutor options</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tailor the tutor to your school syllabus &amp; voice
+                  </p>
+                </div>
                 <Button
                   type="button"
                   size="sm"
@@ -341,6 +391,22 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
                       (change via the pills above the chat)
                     </span>
                   </div>
+                </div>
+
+                {/* NEW: Syllabus / textbook context picker */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                    <BookOpen className="mr-1 inline h-3 w-3" />
+                    Syllabus &amp; textbook
+                  </label>
+                  <SyllabusPicker
+                    boardId={boardId}
+                    grade={grade}
+                    subjectId={subject}
+                    chapterId={chapterId}
+                    onBoardChange={setBoardId}
+                    onChapterChange={setChapterId}
+                  />
                 </div>
 
                 <AnimatePresence>
@@ -369,9 +435,14 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                    Voice-over language
+                    Voice-over language (Indian voices)
                   </label>
                   <VoiceLanguagePicker value={language} onChange={setLanguage} />
+                  <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+                    🇮🇳 All voices use your browser&apos;s built-in
+                    Indian-accent speech engine — Hindi, Kannada, or Indian
+                    English. Works offline, no API key needed.
+                  </p>
                 </div>
               </div>
 
@@ -396,7 +467,7 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
         className="ww-chat-scroll flex-1 overflow-y-auto rounded-xl border border-border/60 bg-card/40 p-3 sm:p-4"
       >
         {turns.length === 0 ? (
-          <EmptyState subject={subject} />
+          <EmptyState subject={subject} boardId={boardId} grade={grade} />
         ) : (
           <div className="space-y-5">
             {turns.map((turn) => (
@@ -457,7 +528,7 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
         )}
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {subject === 'maths' && (
               <Button
                 type="button"
@@ -469,6 +540,17 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
                 <Keyboard className="h-3.5 w-3.5" />
                 {useMathKeyboard ? 'Math KB on' : 'Math KB'}
               </Button>
+            )}
+            {boardData && (
+              <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-[10px]">
+                <BookOpen className="h-2.5 w-2.5" />
+                {describeSyllabusContext({
+                  boardId,
+                  grade,
+                  subjectId: subject,
+                  chapterId,
+                })}
+              </Badge>
             )}
             {question && (
               <Button
@@ -505,7 +587,15 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
   )
 }
 
-function EmptyState({ subject }: { subject: string }) {
+function EmptyState({
+  subject,
+  boardId,
+  grade,
+}: {
+  subject: string
+  boardId: string | null
+  grade: number
+}) {
   const subjectData = SUBJECTS.find((s) => s.id === subject)
   const suggestions =
     subjectData?.examples?.slice(0, 3) ?? [
@@ -526,14 +616,20 @@ function EmptyState({ subject }: { subject: string }) {
       <div>
         <h2 className="text-xl font-bold sm:text-2xl">Ask WonderWhiz anything</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Your AI tutor is ready. Type a question below — answers appear here in a chat
-          you can scroll back through. Switch subjects and styles any time.
+          Your AI tutor is ready. Tip: open <strong>Options</strong> and pick
+          your board (CBSE / ICSE / Karnataka / Maharashtra) so answers match
+          your textbook.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
           <Sparkles className="h-3 w-3" /> Free AI · No signup · Always on
         </span>
+        {boardId && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-400">
+            <BookOpen className="h-3 w-3" /> Class {grade} syllabus active
+          </span>
+        )}
       </div>
       <div className="mt-2 w-full max-w-lg space-y-2">
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -562,6 +658,7 @@ function ChatTurnBubble({
   const subjectData = SUBJECTS.find((s) => s.id === turn.subject)
   const styleData = EXPLANATION_STYLES.find((s) => s.id === turn.style)
   const topicData = turn.topic ? getMathsTopic(turn.topic) : undefined
+  const boardData = turn.boardId ? getBoard(turn.boardId) : undefined
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -588,6 +685,8 @@ function ChatTurnBubble({
             <span>{subjectData?.emoji} {subjectData?.label}</span>
             {topicData && <span>· {topicData.emoji} {topicData.label}</span>}
             <span>· {styleData?.emoji} {styleData?.short}</span>
+            {boardData && <span>· {boardData.shortLabel}·{turn.grade}</span>}
+            {turn.chapterTitle && <span>· {turn.chapterTitle}</span>}
           </div>
         </div>
       </motion.div>

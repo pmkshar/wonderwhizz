@@ -17,7 +17,9 @@ interface VoicePlayerProps {
  * as the primary engine. This is:
  *   - 100% free, no API key, no quota
  *   - Works offline (built into Chrome/Edge/Safari/Firefox)
- *   - Supports many languages including Hindi (hi-IN), Kannada (kn-IN), English (en-US)
+ *   - Strongly prefers Indian-accent voices (en-IN, hi-IN, kn-IN) so the
+ *     tutor always sounds Indian regardless of which system voices are
+ *     installed.
  *
  * Falls back to /api/tts (server-side ZAI TTS) only when:
  *   - The browser does not support SpeechSynthesis, OR
@@ -32,9 +34,10 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
   const [, setVoicesVersion] = useState(0) // forces re-render when voices load
   const voice = getVoiceById(voiceId)
 
-  // Map our voiceId to BCP-47 language codes the browser understands
-  const bcp47 =
-    voiceId === 'hi' ? 'hi-IN' : voiceId === 'kn' ? 'kn-IN' : 'en-US'
+  // Map our voiceId to BCP-47 language codes the browser understands.
+  // All voices resolve to Indian-accent locales.
+  const bcp47 = voice.bcp47 ?? (voiceId === 'hi' ? 'hi-IN' : voiceId === 'kn' ? 'kn-IN' : 'en-IN')
+  const langPrefix = bcp47.slice(0, 2).toLowerCase() // 'hi' | 'kn' | 'en'
 
   // In real browsers, getVoices() returns [] initially and populates
   // asynchronously via the `voiceschanged` event. Listen for it.
@@ -44,8 +47,17 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     window.speechSynthesis.addEventListener('voiceschanged', handler)
     // Some browsers populate voices immediately but don't fire the event
     setVoicesVersion((v) => v + 1)
+    // Poll a few times — Chrome on Android sometimes populates voices late
+    const pollTimer = setInterval(() => {
+      if (window.speechSynthesis.getVoices().length > 0) {
+        setVoicesVersion((v) => v + 1)
+        clearInterval(pollTimer)
+      }
+    }, 250)
+    setTimeout(() => clearInterval(pollTimer), 3000)
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', handler)
+      clearInterval(pollTimer)
     }
   }, [])
 
@@ -84,8 +96,50 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
   }, [])
 
   /**
-   * Try to find a system voice that matches the requested BCP-47 language.
-   * Returns null if no match (in which case we fall back to /api/tts).
+   * Score a system voice by how well it matches our preferred Indian accent.
+   * Higher score = better match. We bias towards:
+   *   1. Exact BCP-47 match (e.g. "hi-IN" when we want "hi-IN")         +100
+   *   2. Same language prefix + Indian region code                      +80
+   *   3. Same language prefix + any region (non-Indian)                 +40
+   *   4. Voice name contains "India" / "Hindi" / "Kannada" / "Heera"    +30
+   *   5. Google / Microsoft branded Indian voices                       +25
+   */
+  function scoreVoice(v: SpeechSynthesisVoice): number {
+    const lang = (v.lang || '').toLowerCase()
+    const name = (v.name || '').toLowerCase()
+    let score = 0
+
+    // Exact BCP-47 match
+    if (lang === bcp47.toLowerCase()) score += 100
+    // Same language prefix + Indian region
+    else if (lang.startsWith(langPrefix) && lang.includes('-in')) score += 80
+    // Same language prefix only (any region) — e.g. en-GB still gets some points
+    else if (lang.startsWith(langPrefix)) score += 40
+
+    // Voice name hints at Indian origin
+    if (
+      name.includes('india') ||
+      name.includes('hindi') ||
+      name.includes('heera') ||
+      name.includes('kalpana') ||
+      name.includes('kannada') ||
+      name.includes('swara') ||
+      name.includes('veer') ||
+      name.includes('mira')
+    ) {
+      score += 30
+    }
+    // Google / Microsoft Indian voices are usually high quality
+    if (name.includes('google') && lang.includes('-in')) score += 25
+    if (name.includes('microsoft') && lang.includes('-in')) score += 20
+
+    return score
+  }
+
+  /**
+   * Try to find the best Indian-accented system voice for the requested
+   * language. Returns null only if NO voice with the same language prefix
+   * exists at all.
    */
   function pickSystemVoice(): SpeechSynthesisVoice | null {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -94,16 +148,14 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     const voices = window.speechSynthesis.getVoices()
     if (!voices || voices.length === 0) return null
 
-    // Try exact match first
-    let v = voices.find((v) => v.lang === bcp47)
-    if (v) return v
-    // Then language-prefix match (e.g. "hi" matches "hi-IN" or "hi-IN-*")
-    v = voices.find((v) => v.lang.toLowerCase().startsWith(voiceId.toLowerCase()))
-    if (v) return v
-    // Then any voice whose lang starts with the same prefix
-    v = voices.find((v) => v.lang.toLowerCase().startsWith(bcp47.slice(0, 2)))
-    if (v) return v
-    return null
+    // Score every voice and pick the highest. Voices that don't match the
+    // language prefix at all get a 0 score and are excluded.
+    const scored = voices
+      .map((v) => ({ v, score: scoreVoice(v) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+
+    return scored[0]?.v ?? null
   }
 
   async function handlePlay() {
@@ -144,7 +196,7 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
           const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
           utter.voice = sysVoice
           utter.lang = sysVoice.lang
-          utter.rate = 1.0
+          utter.rate = 0.95
           utter.pitch = 1.0
           utter.onend = () => setPlaying(false)
           utter.onerror = () => {
@@ -167,7 +219,7 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
           window.speechSynthesis.cancel()
           const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
           utter.lang = bcp47
-          utter.rate = 1.0
+          utter.rate = 0.95
           utter.pitch = 1.0
           utter.onend = () => setPlaying(false)
           utter.onerror = () => {

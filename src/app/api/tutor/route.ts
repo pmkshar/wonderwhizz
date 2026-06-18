@@ -9,6 +9,7 @@ import {
   EXPLANATION_STYLES,
   type ExplanationStyleId,
 } from '@/lib/explanation-prompts'
+import { getBoard, getChapter } from '@/lib/syllabus'
 
 // Pollinations (free fallback) is a reasoning model that can take 15-30s on
 // cold starts. Vercel Hobby plan allows up to 60s for serverless functions.
@@ -16,6 +17,7 @@ export const maxDuration = 60
 export const runtime = 'nodejs'
 
 const VALID_SUBJECTS = new Set(['maths', 'hindi', 'science', 'kannada'])
+const VALID_BOARD_IDS = new Set(['cbse', 'icse', 'kseab', 'msbshe'])
 
 interface HistoryTurn {
   role: 'user' | 'assistant'
@@ -42,6 +44,8 @@ export async function POST(req: Request) {
     question?: string
     language?: string
     topic?: string
+    boardId?: string
+    chapterId?: string
     history?: HistoryTurn[]
   }
 
@@ -52,6 +56,8 @@ export async function POST(req: Request) {
   const language = (body.language ?? 'en').toLowerCase().trim()
   const topic = (body.topic ?? '').trim() || null
   const history = Array.isArray(body.history) ? body.history.slice(-8) : []
+  const boardId = (body.boardId ?? '').trim().toLowerCase() || null
+  const chapterId = (body.chapterId ?? '').trim() || null
 
   if (!VALID_SUBJECTS.has(subject)) {
     return NextResponse.json({ error: 'Please pick a subject.' }, { status: 400 })
@@ -65,8 +71,42 @@ export async function POST(req: Request) {
   if (question.length > 4000) {
     return NextResponse.json({ error: 'Question too long (max 4000 chars).' }, { status: 400 })
   }
+  if (boardId && !VALID_BOARD_IDS.has(boardId)) {
+    return NextResponse.json({ error: 'Unknown school board.' }, { status: 400 })
+  }
 
-  const systemMessage = buildTutorPrompt({ subject, style, grade, question, topic: topic ?? undefined })
+  // Resolve syllabus context (board + optional chapter) for the prompt
+  let boardLabel: string | null = null
+  let chapterTitle: string | null = null
+  let chapterNumber: number | null = null
+  let chapterTopics: string[] | null = null
+  if (boardId) {
+    const board = getBoard(boardId)
+    if (board) {
+      boardLabel = board.label
+      if (chapterId) {
+        const chapter = getChapter(boardId, subject, grade, chapterId)
+        if (chapter) {
+          chapterTitle = chapter.title
+          chapterNumber = chapter.number
+          chapterTopics = chapter.topics
+        }
+      }
+    }
+  }
+
+  const systemMessage = buildTutorPrompt({
+    subject,
+    style,
+    grade,
+    question,
+    topic: topic ?? undefined,
+    boardId,
+    boardLabel,
+    chapterTitle,
+    chapterNumber,
+    chapterTopics,
+  })
   const languageInstruction: ChatMessage = {
     role: 'system',
     content: `The student wants the answer explained in this language: ${language}.
@@ -136,6 +176,9 @@ If English, write in clear simple English.`,
     language,
     grade,
     topic,
+    boardId,
+    chapterId,
+    chapterTitle,
     provider,
   })
 }
