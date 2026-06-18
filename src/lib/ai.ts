@@ -31,7 +31,9 @@ export interface ChatResult {
 }
 
 const POLLINATIONS_URL = 'https://text.pollinations.ai/openai'
-const POLLINATIONS_TIMEOUT_MS = 60_000
+// Pollinations (gpt-oss-20b reasoning model) can take 15-30s on cold starts.
+// 50s timeout leaves a comfortable buffer under Vercel's 60s maxDuration.
+const POLLINATIONS_TIMEOUT_MS = 50_000
 
 /**
  * Try ZAI first. Returns null if ZAI is unavailable OR returns an
@@ -94,6 +96,8 @@ async function callPollinations(opts: ChatOptions): Promise<ChatResult> {
         temperature: opts.temperature ?? 0.5,
         max_tokens: opts.maxTokens ?? 1400,
         // Anonymous tier — no auth, no API key.
+        // `private: true` keeps the request out of the public Pollinations feed.
+        private: true,
       }),
     })
 
@@ -118,6 +122,40 @@ async function callPollinations(opts: ChatOptions): Promise<ChatResult> {
 }
 
 /**
+ * Last-resort GET endpoint fallback. Pollinations also exposes a simple
+ * text endpoint at https://text.pollinations.ai/{prompt} which is sometimes
+ * faster than the OpenAI-compatible POST. Used only if the POST fails.
+ */
+async function callPollinationsGet(opts: ChatOptions): Promise<ChatResult> {
+  // Compose a single prompt from the message list
+  const systemMsgs = opts.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n')
+  const userMsgs = opts.messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n\n')
+  const prompt = `${systemMsgs}\n\nQuestion: ${userMsgs}\n\nAnswer:`
+
+  const url = `https://text.pollinations.ai/${encodeURIComponent(prompt.slice(0, 3500))}?model=openai&private=true&seed=${Math.floor(Math.random() * 1e6)}`
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`Pollinations GET HTTP ${res.status}`)
+    }
+    const content = await res.text()
+    if (!content.trim()) {
+      throw new Error('Pollinations GET returned empty body')
+    }
+    return { content, provider: 'pollinations' }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Main entry point. Tries ZAI first (if configured), then falls back to
  * the free Pollinations.ai endpoint. Always returns content or throws.
  */
@@ -125,5 +163,10 @@ export async function chatWithFallback(opts: ChatOptions): Promise<ChatResult> {
   const zaiResult = await tryZai(opts)
   if (zaiResult) return zaiResult
 
-  return await callPollinations(opts)
+  try {
+    return await callPollinations(opts)
+  } catch (postErr) {
+    console.warn('[ai] Pollinations POST failed, trying GET fallback:', postErr)
+    return await callPollinationsGet(opts)
+  }
 }

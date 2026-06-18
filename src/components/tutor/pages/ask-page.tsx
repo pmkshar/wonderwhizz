@@ -635,7 +635,7 @@ function ChatTurnBubble({
               <div className="h-3.5 w-2/3 animate-pulse rounded bg-muted" />
               <div className="flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Crafting your {styleData?.label.toLowerCase()}...
+                Crafting your {styleData?.label.toLowerCase()}... (free AI can take 15-25s)
               </div>
             </div>
           ) : turn.error ? (

@@ -10,6 +10,11 @@ import {
   type ExplanationStyleId,
 } from '@/lib/explanation-prompts'
 
+// Pollinations (free fallback) is a reasoning model that can take 15-30s on
+// cold starts. Vercel Hobby plan allows up to 60s for serverless functions.
+export const maxDuration = 60
+export const runtime = 'nodejs'
+
 const VALID_SUBJECTS = new Set(['maths', 'hindi', 'science', 'kannada'])
 
 interface HistoryTurn {
@@ -83,7 +88,7 @@ If English, write in clear simple English.`,
     const result = await chatWithFallback({
       messages,
       temperature: 0.5,
-      maxTokens: 1400,
+      maxTokens: 900,
     })
     answer = result.content
     provider = result.provider
