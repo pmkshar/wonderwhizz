@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +19,6 @@ import {
   Check,
   RefreshCw,
 } from 'lucide-react'
-import { SubjectSelector } from '../subject-selector'
 import {
   ExplanationStyleSelector,
 } from '../explanation-styles'
@@ -167,6 +165,12 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
       toast.success(
         data.provider === 'pollinations'
           ? 'Answer ready! 🎉 (free AI)'
+          : data.provider === 'groq'
+          ? 'Answer ready! 🎉 (Groq Llama 3.3)'
+          : data.provider === 'gemini'
+          ? 'Answer ready! 🎉 (Gemini Flash)'
+          : data.provider === 'zai'
+          ? 'Answer ready! 🎉'
           : 'Answer ready! 🎉'
       )
     } catch (err) {
@@ -292,35 +296,51 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
         </div>
       </div>
 
-      {/* Expandable settings panel */}
+      {/* Expandable settings panel — slide-out drawer so it never pushes the chat */}
       <AnimatePresence>
         {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <Card className="border-border/60">
-              <CardContent className="space-y-4 p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold">Tutor options</h3>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowSettings(false)}
-                    className="h-7 px-2"
-                  >
-                    <X className="h-4 w-4" /> Close
-                  </Button>
-                </div>
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowSettings(false)}
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+              className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-card shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-border/60 p-4">
+                <h3 className="text-base font-bold">Tutor options</h3>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowSettings(false)}
+                  className="h-8 px-2"
+                >
+                  <X className="h-4 w-4" /> Close
+                </Button>
+              </div>
 
+              <div className="ww-chat-scroll flex-1 space-y-5 overflow-y-auto p-4">
+                {/* Subject — REMOVED from here (already in top bar); show current selection only */}
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                    Subject
+                    Current subject
                   </label>
-                  <SubjectSelector value={subject} onChange={setSubject} />
+                  <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-semibold">
+                    {subjectData?.emoji} {subjectData?.label}
+                    <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                      (change via the pills above the chat)
+                    </span>
+                  </div>
                 </div>
 
                 <AnimatePresence>
@@ -353,9 +373,20 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
                   </label>
                   <VoiceLanguagePicker value={language} onChange={setLanguage} />
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+              </div>
+
+              <div className="border-t border-border/60 p-3">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setShowSettings(false)}
+                >
+                  Done
+                </Button>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -586,7 +617,15 @@ function ChatTurnBubble({
                   {turn.language}
                   {turn.provider && (
                     <span className="ml-1 rounded bg-muted px-1 py-0 font-mono">
-                      {turn.provider === 'pollinations' ? 'free AI' : turn.provider}
+                      {turn.provider === 'pollinations'
+                        ? 'free AI'
+                        : turn.provider === 'groq'
+                        ? 'Llama 3.3'
+                        : turn.provider === 'gemini'
+                        ? 'Gemini'
+                        : turn.provider === 'zai'
+                        ? 'ZAI'
+                        : turn.provider}
                     </span>
                   )}
                 </div>
