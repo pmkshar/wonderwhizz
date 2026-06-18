@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { createZaiClient } from '@/lib/zai-client'
+import { chatWithFallback, type ChatMessage } from '@/lib/ai'
+import { maybeAwardAchievement } from '@/lib/achievements'
 import {
   buildTutorPrompt,
   EXPLANATION_STYLES,
@@ -10,6 +11,11 @@ import {
 } from '@/lib/explanation-prompts'
 
 const VALID_SUBJECTS = new Set(['maths', 'hindi', 'science', 'kannada'])
+
+interface HistoryTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
@@ -31,6 +37,7 @@ export async function POST(req: Request) {
     question?: string
     language?: string
     topic?: string
+    history?: HistoryTurn[]
   }
 
   const subject = (body.subject ?? '').toLowerCase().trim()
@@ -39,6 +46,7 @@ export async function POST(req: Request) {
   const grade = typeof body.grade === 'number' ? body.grade : user.grade
   const language = (body.language ?? 'en').toLowerCase().trim()
   const topic = (body.topic ?? '').trim() || null
+  const history = Array.isArray(body.history) ? body.history.slice(-8) : []
 
   if (!VALID_SUBJECTS.has(subject)) {
     return NextResponse.json({ error: 'Please pick a subject.' }, { status: 400 })
@@ -54,31 +62,38 @@ export async function POST(req: Request) {
   }
 
   const systemMessage = buildTutorPrompt({ subject, style, grade, question, topic: topic ?? undefined })
-  const languageInstruction = {
-    role: 'system' as const,
+  const languageInstruction: ChatMessage = {
+    role: 'system',
     content: `The student wants the answer explained in this language: ${language}.
 If the chosen language is Hindi or Kannada, write the explanation primarily in that language (you may keep mathematical notation, code, and proper nouns in English).
 If English, write in clear simple English.`,
   }
 
+  // Build the conversation: system messages -> prior turns -> new question
+  const messages: ChatMessage[] = [
+    systemMessage,
+    languageInstruction,
+    ...history.map((t) => ({ role: t.role, content: t.content }) as ChatMessage),
+    { role: 'user', content: question },
+  ]
+
   let answer: string
+  let provider: string
   try {
-    const zai = await createZaiClient()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        systemMessage,
-        languageInstruction,
-        { role: 'user', content: question },
-      ],
-      thinking: { type: 'disabled' },
+    const result = await chatWithFallback({
+      messages,
       temperature: 0.5,
-      max_tokens: 1400,
+      maxTokens: 1400,
     })
-    answer = completion.choices[0]?.message?.content ?? ''
+    answer = result.content
+    provider = result.provider
   } catch (err) {
-    console.error('[tutor] LLM error', err)
+    console.error('[tutor] LLM error (all providers failed)', err)
     return NextResponse.json(
-      { error: 'The tutor is taking a quick nap. Please try again in a moment.' },
+      {
+        error:
+          'The tutor is taking a quick nap. Please try again in a moment — our free AI provider may be busy.',
+      },
       { status: 502 }
     )
   }
@@ -116,5 +131,6 @@ If English, write in clear simple English.`,
     language,
     grade,
     topic,
+    provider,
   })
 }
