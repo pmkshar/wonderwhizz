@@ -29,11 +29,25 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
   const [playing, setPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [usingFallback, setUsingFallback] = useState(false)
+  const [, setVoicesVersion] = useState(0) // forces re-render when voices load
   const voice = getVoiceById(voiceId)
 
   // Map our voiceId to BCP-47 language codes the browser understands
   const bcp47 =
     voiceId === 'hi' ? 'hi-IN' : voiceId === 'kn' ? 'kn-IN' : 'en-US'
+
+  // In real browsers, getVoices() returns [] initially and populates
+  // asynchronously via the `voiceschanged` event. Listen for it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const handler = () => setVoicesVersion((v) => v + 1)
+    window.speechSynthesis.addEventListener('voiceschanged', handler)
+    // Some browsers populate voices immediately but don't fire the event
+    setVoicesVersion((v) => v + 1)
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', handler)
+    }
+  }, [])
 
   // Cleanup previous blob URL when audioUrl changes
   useEffect(() => {
@@ -144,10 +158,38 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
         } finally {
           setLoading(false)
         }
+      } else {
+        // Browser supports SpeechSynthesis but has no system voices installed
+        // (common on headless browsers; rare on real user devices). Try speaking
+        // without an explicit voice — the browser will use its default voice.
+        setLoading(true)
+        try {
+          window.speechSynthesis.cancel()
+          const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
+          utter.lang = bcp47
+          utter.rate = 1.0
+          utter.pitch = 1.0
+          utter.onend = () => setPlaying(false)
+          utter.onerror = () => {
+            setPlaying(false)
+            // Last resort: fall through to /api/tts
+            void handleServerTts()
+          }
+          window.speechSynthesis.speak(utter)
+          setUsingFallback(false)
+          setPlaying(true)
+          return
+        } finally {
+          setLoading(false)
+        }
       }
     }
 
     // FALLBACK PATH: server-side /api/tts (ZAI TTS — may fail with 0 balance)
+    await handleServerTts()
+  }
+
+  async function handleServerTts() {
     setLoading(true)
     try {
       const res = await fetch('/api/tts', {
