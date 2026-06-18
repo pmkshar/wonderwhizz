@@ -54,8 +54,14 @@ async function tryZai(opts: ChatOptions): Promise<ChatResult | null> {
       temperature: opts.temperature ?? 0.5,
       max_tokens: opts.maxTokens ?? 1400,
     })
-    const content = completion.choices[0]?.message?.content ?? ''
-    if (!content.trim()) return null
+    // ZAI returns malformed responses (no choices array) when the API key
+    // has insufficient balance — guard against this and fall back gracefully.
+    const choices = (completion as { choices?: Array<{ message?: { content?: string } }> }).choices
+    const content = choices?.[0]?.message?.content ?? ''
+    if (!content.trim()) {
+      console.warn('[ai] ZAI returned empty/malformed response (likely 0 balance), falling back')
+      return null
+    }
     return { content, provider: 'zai' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
