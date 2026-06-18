@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Loader2,
@@ -14,6 +15,7 @@ import {
   XCircle,
   TrendingUp,
   Calendar,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -62,16 +64,27 @@ interface ProgressData {
 export function ProgressPage() {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/progress')
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const txt = await r.text().catch(() => '')
+          throw new Error(`Failed (${r.status}): ${txt.slice(0, 200)}`)
+        }
+        return r.json()
+      })
       .then((d) => {
         if (!cancelled) setData(d as ProgressData)
       })
-      .catch(() => {
-        if (!cancelled) setData(null)
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[progress] fetch failed', err)
+          setError(err instanceof Error ? err.message : 'Could not load progress')
+          setData(null)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -81,10 +94,36 @@ export function ProgressPage() {
     }
   }, [])
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 p-6 text-center dark:bg-amber-950/20">
+        <div className="text-4xl">😕</div>
+        <h2 className="mt-2 text-lg font-semibold">Couldn&rsquo;t load your progress</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {error ?? 'Please try again in a moment.'}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-3 gap-1.5"
+          onClick={() => {
+            setError(null)
+            setLoading(true)
+            // Trigger a re-fetch by reloading the page; simplest reliable way
+            if (typeof window !== 'undefined') window.location.reload()
+          }}
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Try again
+        </Button>
       </div>
     )
   }

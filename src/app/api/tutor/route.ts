@@ -128,7 +128,7 @@ If English, write in clear simple English.`,
     const result = await chatWithFallback({
       messages,
       temperature: 0.5,
-      maxTokens: 900,
+      maxTokens: 1400,
     })
     answer = result.content
     provider = result.provider

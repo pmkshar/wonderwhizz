@@ -35,6 +35,11 @@ import {
 } from '@/lib/explanation-prompts'
 import { SUBJECTS, getMathsTopic } from '@/lib/subjects'
 import { describeSyllabusContext, getBoard, getChapter } from '@/lib/syllabus'
+import {
+  getSampleQuestions,
+  getGeneralSampleQuestions,
+  type SampleQuestion,
+} from '@/lib/sample-questions'
 
 interface AskPageProps {
   user: {
@@ -467,7 +472,17 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
         className="ww-chat-scroll flex-1 overflow-y-auto rounded-xl border border-border/60 bg-card/40 p-3 sm:p-4"
       >
         {turns.length === 0 ? (
-          <EmptyState subject={subject} boardId={boardId} grade={grade} />
+          <EmptyState
+            subject={subject}
+            boardId={boardId}
+            chapterId={chapterId}
+            grade={grade}
+            onPickQuestion={(q) => {
+              setQuestion(q)
+              // Auto-focus the textarea so the student can hit Enter to send
+              setTimeout(() => inputRef.current?.focus(), 0)
+            }}
+          />
         ) : (
           <div className="space-y-5">
             {turns.map((turn) => (
@@ -493,6 +508,22 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           </div>
         )}
       </div>
+
+      {/* Quick-question chips above the composer — only show when a chapter
+          is selected so the student gets chapter-specific prompts they can
+          tap to ask instantly. */}
+      {boardId && chapterId && turns.length > 0 && (
+        <QuickQuestionsBar
+          subject={subject}
+          boardId={boardId}
+          chapterId={chapterId}
+          grade={grade}
+          onPick={(q) => {
+            setQuestion(q)
+            setTimeout(() => inputRef.current?.focus(), 0)
+          }}
+        />
+      )}
 
       {/* Composer (input + send) at the bottom */}
       <div className="rounded-xl border border-border/60 bg-card p-2.5 shadow-sm sm:p-3">
@@ -583,6 +614,34 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           </Button>
         </div>
       </div>
+
+      {/* Quick-subject switcher — bottom of composer so the student can
+          instantly switch to another subject without scrolling back up.
+          Shows all subjects as compact pills with the current one highlighted. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-border/60 bg-card/40 p-1.5">
+        <span className="shrink-0 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Next subject:
+        </span>
+        {SUBJECTS.map((s) => {
+          const active = s.id === subject
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSubject(s.id)}
+              aria-pressed={active}
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-all ${
+                active
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/50 text-foreground hover:bg-muted'
+              }`}
+            >
+              <span>{s.emoji}</span>
+              {s.label}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -590,19 +649,23 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 function EmptyState({
   subject,
   boardId,
+  chapterId,
   grade,
+  onPickQuestion,
 }: {
   subject: string
   boardId: string | null
+  chapterId: string | null
   grade: number
+  onPickQuestion: (q: string) => void
 }) {
   const subjectData = SUBJECTS.find((s) => s.id === subject)
-  const suggestions =
-    subjectData?.examples?.slice(0, 3) ?? [
-      'What is photosynthesis?',
-      'Explain Pythagoras theorem',
-      'How do I solve a quadratic equation?',
-    ]
+  // Chapter-specific sample questions if a chapter is selected; otherwise
+  // fall back to the subject's general examples.
+  const samples: SampleQuestion[] =
+    boardId && chapterId
+      ? getSampleQuestions({ boardId, grade, subjectId: subject, chapterId })
+      : getGeneralSampleQuestions(subject)
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
@@ -616,9 +679,19 @@ function EmptyState({
       <div>
         <h2 className="text-xl font-bold sm:text-2xl">Ask WonderWhiz anything</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Your AI tutor is ready. Tip: open <strong>Options</strong> and pick
-          your board (CBSE / ICSE / Karnataka / Maharashtra) so answers match
-          your textbook.
+          {boardId && chapterId ? (
+            <>
+              Your tutor is set to <strong>{subjectData?.label}</strong> ·{' '}
+              {describeSyllabusContext({ boardId, grade, subjectId: subject, chapterId })}.
+              Tap any question below or type your own.
+            </>
+          ) : (
+            <>
+              Your AI tutor is ready. Tip: open <strong>Options</strong> and pick
+              your board (CBSE / ICSE / Karnataka / Maharashtra) so answers match
+              your textbook.
+            </>
+          )}
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
@@ -631,19 +704,71 @@ function EmptyState({
           </span>
         )}
       </div>
-      <div className="mt-2 w-full max-w-lg space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Try one of these
-        </div>
-        {suggestions.map((s, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-left text-sm text-foreground"
-          >
-            {s}
+      {samples.length > 0 && (
+        <div className="mt-2 w-full max-w-lg space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {boardId && chapterId
+              ? 'Chapter practice — tap to ask'
+              : 'Try one of these'}
           </div>
-        ))}
-      </div>
+          {samples.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onPickQuestion(s.text)}
+              className="group flex w-full items-start gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-left text-sm text-foreground transition-all hover:border-primary hover:bg-primary/5"
+            >
+              <span className="text-base leading-none">{s.emoji}</span>
+              <span className="flex-1">{s.text}</span>
+              <span className="shrink-0 self-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+                {s.tag}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Compact quick-question bar that appears above the composer when a
+ * chapter is selected AND the student has already started chatting.
+ * Surfaces 3-4 chapter-specific prompts the student can tap to instantly
+ * continue the conversation without losing context. */
+function QuickQuestionsBar({
+  subject,
+  boardId,
+  chapterId,
+  grade,
+  onPick,
+}: {
+  subject: string
+  boardId: string
+  chapterId: string
+  grade: number
+  onPick: (q: string) => void
+}) {
+  const samples = getSampleQuestions({ boardId, grade, subjectId: subject, chapterId })
+  if (samples.length === 0) return null
+  // Only show the first 4 to keep the bar compact
+  const display = samples.slice(0, 4)
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-border/60 bg-muted/20 p-1.5">
+      <span className="shrink-0 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Quick ask:
+      </span>
+      {display.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onPick(s.text)}
+          className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border/60 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
+          title={s.text}
+        >
+          <span>{s.emoji}</span>
+          <span className="max-w-[200px] truncate">{s.text}</span>
+        </button>
+      ))}
     </div>
   )
 }

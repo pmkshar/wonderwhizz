@@ -40,6 +40,23 @@ export function Markdown({ content }: { content: string }) {
           pre({ children }) {
             return <pre>{children}</pre>
           },
+          a({ href, children, ...props }) {
+            // Render all links as safe external links opening in a new tab.
+            // ReactMarkdown by default only allows http(s) and relative URLs.
+            const safeHref = href && /^(https?:\/\/|\/)/i.test(href) ? href : undefined
+            if (!safeHref) return <span>{children}</span>
+            return (
+              <a
+                href={safeHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-2 hover:no-underline"
+                {...props}
+              >
+                {children}
+              </a>
+            )
+          },
         }}
       >
         {content}

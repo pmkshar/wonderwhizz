@@ -21,9 +21,16 @@ interface VoicePlayerProps {
  *     tutor always sounds Indian regardless of which system voices are
  *     installed.
  *
- * Falls back to /api/tts (server-side ZAI TTS) only when:
- *   - The browser does not support SpeechSynthesis, OR
- *   - No matching system voice can be found for the requested language
+ * For Hindi (hi) and Kannada (kn), we DON'T rely solely on SpeechSynthesis —
+ * most desktop browsers (Chrome on Windows/Mac, Firefox) ship en-IN but NOT
+ * hi-IN or kn-IN voices, so the previous version appeared to "do nothing"
+ * for Hindi/Kannada. We now:
+ *   1. Try SpeechSynthesis with the exact Indian-locale voice first.
+ *   2. If no matching voice exists for hi/kn, fall back to Google Translate
+ *      TTS (`translate.google.com/translate_tts`) which supports hi + kn
+ *      natively, is free, requires no API key, and returns MP3 audio we can
+ *      play with an <audio> element.
+ *   3. As a last resort, try the server-side /api/tts route (ZAI TTS).
  */
 export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -31,7 +38,8 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
   const [playing, setPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [usingFallback, setUsingFallback] = useState(false)
-  const [, setVoicesVersion] = useState(0) // forces re-render when voices load
+  const [voicesVersion, setVoicesVersion] = useState(0) // forces re-render when voices load
+  const [voiceMode, setVoiceMode] = useState<'system' | 'google' | 'server' | null>(null)
   const voice = getVoiceById(voiceId)
 
   // Map our voiceId to BCP-47 language codes the browser understands.
@@ -45,9 +53,7 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     const handler = () => setVoicesVersion((v) => v + 1)
     window.speechSynthesis.addEventListener('voiceschanged', handler)
-    // Some browsers populate voices immediately but don't fire the event
     setVoicesVersion((v) => v + 1)
-    // Poll a few times — Chrome on Android sometimes populates voices late
     const pollTimer = setInterval(() => {
       if (window.speechSynthesis.getVoices().length > 0) {
         setVoicesVersion((v) => v + 1)
@@ -77,6 +83,7 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
       setAudioUrl(null)
     }
     setPlaying(false)
+    setVoiceMode(null)
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
     }
@@ -109,14 +116,10 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     const name = (v.name || '').toLowerCase()
     let score = 0
 
-    // Exact BCP-47 match
     if (lang === bcp47.toLowerCase()) score += 100
-    // Same language prefix + Indian region
     else if (lang.startsWith(langPrefix) && lang.includes('-in')) score += 80
-    // Same language prefix only (any region) — e.g. en-GB still gets some points
     else if (lang.startsWith(langPrefix)) score += 40
 
-    // Voice name hints at Indian origin
     if (
       name.includes('india') ||
       name.includes('hindi') ||
@@ -129,7 +132,6 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     ) {
       score += 30
     }
-    // Google / Microsoft Indian voices are usually high quality
     if (name.includes('google') && lang.includes('-in')) score += 25
     if (name.includes('microsoft') && lang.includes('-in')) score += 20
 
@@ -140,22 +142,42 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
    * Try to find the best Indian-accented system voice for the requested
    * language. Returns null only if NO voice with the same language prefix
    * exists at all.
+   *
+   * NOTE: `voicesVersion` is read here (not in state) so the function always
+   * sees the latest voices list — re-renders triggered by setVoicesVersion
+   * make sure pickSystemVoice is re-invoked on the latest data.
    */
   function pickSystemVoice(): SpeechSynthesisVoice | null {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       return null
     }
+    // touch voicesVersion so React re-renders re-call this fn after voices load
+    void voicesVersion
     const voices = window.speechSynthesis.getVoices()
     if (!voices || voices.length === 0) return null
 
-    // Score every voice and pick the highest. Voices that don't match the
-    // language prefix at all get a 0 score and are excluded.
     const scored = voices
       .map((v) => ({ v, score: scoreVoice(v) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
 
     return scored[0]?.v ?? null
+  }
+
+  /**
+   * Returns true if the browser has any system voice that EXACTLY matches
+   * the requested Indian locale (e.g. hi-IN, kn-IN). If false, the Web Speech
+   * API can't actually speak this language and we should fall back to Google
+   * Translate TTS instead.
+   */
+  function hasExactIndianVoice(): boolean {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return false
+    }
+    void voicesVersion
+    const voices = window.speechSynthesis.getVoices()
+    if (!voices || voices.length === 0) return false
+    return voices.some((v) => v.lang?.toLowerCase() === bcp47.toLowerCase())
   }
 
   async function handlePlay() {
@@ -186,59 +208,158 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
       return
     }
 
-    // PRIMARY PATH: Browser Web Speech API
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const sysVoice = pickSystemVoice()
-      if (sysVoice) {
-        setLoading(true)
-        try {
-          window.speechSynthesis.cancel() // clear any pending speech
-          const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
-          utter.voice = sysVoice
-          utter.lang = sysVoice.lang
-          utter.rate = 0.95
-          utter.pitch = 1.0
-          utter.onend = () => setPlaying(false)
-          utter.onerror = () => {
-            setPlaying(false)
-            toast.error('Voice playback failed. Try again.')
+    // PRIMARY PATH (English / Indian-English): Browser Web Speech API
+    // We try this for en first because en-IN voices are widely available.
+    if (langPrefix === 'en') {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const sysVoice = pickSystemVoice()
+        if (sysVoice) {
+          setLoading(true)
+          try {
+            window.speechSynthesis.cancel()
+            const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
+            utter.voice = sysVoice
+            utter.lang = sysVoice.lang
+            utter.rate = 0.95
+            utter.pitch = 1.0
+            utter.onend = () => setPlaying(false)
+            utter.onerror = () => {
+              setPlaying(false)
+              toast.error('Voice playback failed. Try again.')
+            }
+            window.speechSynthesis.speak(utter)
+            setUsingFallback(false)
+            setVoiceMode('system')
+            setPlaying(true)
+            return
+          } finally {
+            setLoading(false)
           }
-          window.speechSynthesis.speak(utter)
-          setUsingFallback(false)
-          setPlaying(true)
-          return
-        } finally {
-          setLoading(false)
-        }
-      } else {
-        // Browser supports SpeechSynthesis but has no system voices installed
-        // (common on headless browsers; rare on real user devices). Try speaking
-        // without an explicit voice — the browser will use its default voice.
-        setLoading(true)
-        try {
-          window.speechSynthesis.cancel()
-          const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
-          utter.lang = bcp47
-          utter.rate = 0.95
-          utter.pitch = 1.0
-          utter.onend = () => setPlaying(false)
-          utter.onerror = () => {
-            setPlaying(false)
-            // Last resort: fall through to /api/tts
-            void handleServerTts()
-          }
-          window.speechSynthesis.speak(utter)
-          setUsingFallback(false)
-          setPlaying(true)
-          return
-        } finally {
-          setLoading(false)
         }
       }
+      // No en-IN voice — fall through to Google TTS
+    } else {
+      // Hindi or Kannada: try system voice ONLY if an exact hi-IN / kn-IN
+      // voice exists. Otherwise, skip straight to Google TTS to avoid
+      // the previous bug where SpeechSynthesis would silently do nothing.
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && hasExactIndianVoice()) {
+        const sysVoice = pickSystemVoice()
+        if (sysVoice) {
+          setLoading(true)
+          try {
+            window.speechSynthesis.cancel()
+            const utter = new SpeechSynthesisUtterance(text.slice(0, 1200))
+            utter.voice = sysVoice
+            utter.lang = sysVoice.lang
+            utter.rate = 0.92 // slightly slower for clarity in Indian langs
+            utter.pitch = 1.0
+            utter.onend = () => setPlaying(false)
+            utter.onerror = () => {
+              setPlaying(false)
+              // Fall through to Google TTS on error
+              void handleGoogleTts()
+            }
+            window.speechSynthesis.speak(utter)
+            setUsingFallback(false)
+            setVoiceMode('system')
+            setPlaying(true)
+            return
+          } finally {
+            setLoading(false)
+          }
+        }
+      }
+      // No exact Indian voice — use Google TTS (free, supports hi + kn)
     }
 
-    // FALLBACK PATH: server-side /api/tts (ZAI TTS — may fail with 0 balance)
-    await handleServerTts()
+    // SECONDARY FALLBACK: Google Translate TTS (free, no API key, supports hi + kn)
+    await handleGoogleTts()
+  }
+
+  /**
+   * Build a Google Translate TTS URL for the text.
+   * This is the same endpoint used by Google Translate's "Listen" button
+   * and supports all major Indian languages (hi, kn, en-IN, ta, te, ml, mr, bn...).
+   *
+   * Note: Google rate-limits this if abused. We chunk to 200 chars (Google's
+   * TTS URL length cap) and play sequentially if needed.
+   */
+  async function handleGoogleTts() {
+    setLoading(true)
+    try {
+      // Google TTS has a ~200 char URL limit per request. Chunk longer text.
+      const chunks = chunkText(text.slice(0, 1500), 190)
+      if (chunks.length === 0) {
+        throw new Error('Nothing to read.')
+      }
+
+      // Build a single combined audio by fetching each chunk and concatenating.
+      // For simplicity (and since most tutor answers are < 200 chars when spoken),
+      // if there's only one chunk we just play it directly.
+      if (chunks.length === 1) {
+        const url = buildGoogleTtsUrl(chunks[0], langPrefix)
+        await playUrl(url)
+        setVoiceMode('google')
+        return
+      }
+
+      // Multiple chunks — fetch each, concatenate as Blob, play
+      const blobParts: ArrayBuffer[] = []
+      for (const chunk of chunks) {
+        const url = buildGoogleTtsUrl(chunk, langPrefix)
+        try {
+          const res = await fetch(url)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const buf = await res.arrayBuffer()
+          blobParts.push(buf)
+        } catch (err) {
+          console.warn('[voice] google tts chunk failed', err)
+          // skip failed chunk; continue
+        }
+      }
+      if (blobParts.length === 0) throw new Error('All chunks failed')
+      const blob = new Blob(blobParts, { type: 'audio/mpeg' })
+      const blobUrl = URL.createObjectURL(blob)
+      setAudioUrl(blobUrl)
+      setUsingFallback(true)
+      setVoiceMode('google')
+      setTimeout(async () => {
+        if (audioRef.current) {
+          audioRef.current.src = blobUrl
+          try {
+            await audioRef.current.play()
+            setPlaying(true)
+          } catch {
+            toast.error('Please tap play again to listen.')
+          }
+        }
+      }, 50)
+    } catch (err) {
+      console.warn('[voice] google tts failed, trying server TTS', err)
+      // Last resort: server-side /api/tts (ZAI TTS)
+      await handleServerTts()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /** Play a single URL via the audio element. */
+  async function playUrl(url: string) {
+    setAudioUrl(url)
+    setUsingFallback(true)
+    setTimeout(async () => {
+      if (audioRef.current) {
+        audioRef.current.src = url
+        try {
+          await audioRef.current.play()
+          setPlaying(true)
+        } catch (err) {
+          console.warn('[voice] audio.play() failed', err)
+          // CORS or autoplay policy — show toast and let user tap play
+          toast.error('Tap play again to listen.')
+        }
+      }
+    }, 50)
   }
 
   async function handleServerTts() {
@@ -257,6 +378,7 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
       const url = URL.createObjectURL(blob)
       setAudioUrl(url)
       setUsingFallback(true)
+      setVoiceMode('server')
       setTimeout(async () => {
         if (audioRef.current) {
           audioRef.current.src = url
@@ -287,6 +409,16 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
     }
     setPlaying(false)
   }
+
+  // Show the engine badge so the user knows which voice was used.
+  const engineLabel =
+    voiceMode === 'google'
+      ? 'Google voice'
+      : voiceMode === 'server'
+      ? 'Server voice'
+      : voiceMode === 'system'
+      ? 'System voice'
+      : null
 
   return (
     <div className="flex items-center gap-2">
@@ -332,9 +464,61 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
       )}
       {playing && (
         <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
-          <Volume2 className="h-3.5 w-3.5 animate-pulse" /> speaking...
+          <Volume2 className="h-3.5 w-3.5 animate-pulse" />
+          {engineLabel ? `${engineLabel} · speaking...` : 'speaking...'}
         </span>
       )}
     </div>
   )
+}
+
+/** Build a Google Translate TTS URL for a single chunk of text. */
+function buildGoogleTtsUrl(text: string, langPrefix: string): string {
+  // Google TTS expects lang codes like 'hi', 'kn', 'en'. For Indian English
+  // we use 'en-IN' style — Google accepts both but 'en' is more reliable.
+  const lang = langPrefix === 'en' ? 'en-IN' : langPrefix
+  const params = new URLSearchParams({
+    ie: 'UTF-8',
+    q: text,
+    tl: lang,
+    total: '1',
+    idx: '0',
+    textlen: String(text.length),
+    client: 'tw-ob',
+  })
+  return `https://translate.google.com/translate_tts?${params.toString()}`
+}
+
+/** Split text into chunks of maxLen chars, breaking at sentence boundaries. */
+function chunkText(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text]
+  const chunks: string[] = []
+  // Split on sentence-ending punctuation first, then on spaces
+  const sentences = text.split(/(?<=[.!?।؟])\s+/)
+  let current = ''
+  for (const s of sentences) {
+    if ((current + ' ' + s).trim().length <= maxLen) {
+      current = (current + ' ' + s).trim()
+    } else {
+      if (current) chunks.push(current)
+      // If a single sentence is longer than maxLen, hard-split it
+      if (s.length > maxLen) {
+        const words = s.split(' ')
+        let buf = ''
+        for (const w of words) {
+          if ((buf + ' ' + w).trim().length <= maxLen) {
+            buf = (buf + ' ' + w).trim()
+          } else {
+            if (buf) chunks.push(buf)
+            buf = w
+          }
+        }
+        if (buf) chunks.push(buf)
+      } else {
+        current = s
+      }
+    }
+  }
+  if (current) chunks.push(current)
+  return chunks
 }

@@ -3,6 +3,20 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 
+// Build a "last 7 days" series starting 6 days ago at 00:00 UTC.
+// Returns Date objects in chronological order (oldest -> today).
+function last7DayStarts(): Date[] {
+  const out: Date[] = []
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today)
+    d.setUTCDate(d.getUTCDate() - i)
+    out.push(d)
+  }
+  return out
+}
+
 // GET /api/progress — student's progress summary
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -28,8 +42,8 @@ export async function GET() {
     topicBreakdown,
     styleBreakdown,
     langBreakdown,
-    last7DaysQuestions,
-    last7DaysPractice,
+    last7DaysQuestionsRaw,
+    last7DaysPracticeRaw,
   ] = await Promise.all([
     db.question.count({ where: { userId: user.id } }),
     db.practiceAttempt.count({ where: { userId: user.id } }),
@@ -89,26 +103,51 @@ export async function GET() {
       where: { userId: user.id },
       _count: true,
     }),
-    // Last 7 days questions (grouped by day)
-    db.$queryRaw<{ day: string; count: number }[]>`
-      SELECT DATE(createdAt) as day, COUNT(*) as count
-      FROM Question
-      WHERE userId = ${user.id}
-        AND createdAt >= datetime('now', '-6 days')
-      GROUP BY DATE(createdAt)
-      ORDER BY day ASC
-    `,
-    db.$queryRaw<{ day: string; count: number; correct: number }[]>`
-      SELECT DATE(createdAt) as day,
-             COUNT(*) as count,
-             SUM(CASE WHEN isCorrect = 1 THEN 1 ELSE 0 END) as correct
-      FROM PracticeAttempt
-      WHERE userId = ${user.id}
-        AND createdAt >= datetime('now', '-6 days')
-      GROUP BY DATE(createdAt)
-      ORDER BY day ASC
-    `,
+    // Last 7 days questions (Prisma findMany — cross-DB safe)
+    db.question.findMany({
+      where: {
+        userId: user.id,
+        createdAt: { gte: last7DayStarts()[0] },
+      },
+      select: { createdAt: true },
+    }),
+    // Last 7 days practice attempts (with correctness for accuracy calc)
+    db.practiceAttempt.findMany({
+      where: {
+        userId: user.id,
+        createdAt: { gte: last7DayStarts()[0] },
+      },
+      select: { createdAt: true, isCorrect: true },
+    }),
   ])
+
+  // Aggregate the 7-day series in JS — works on both SQLite (local dev) and
+  // PostgreSQL (Vercel/Neon). The previous raw SQL used SQLite-specific
+  // syntax (`datetime('now', '-6 days')`, `DATE(...)`, `SUM(CASE WHEN ...)`)
+  // which crashed on PostgreSQL and caused Progress + Achievements to hang
+  // forever with a 500 in the network tab.
+  const dayStarts = last7DayStarts()
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10)
+  const dayLabels = dayStarts.map((d) => ({
+    key: dayKey(d),
+    date: d,
+  }))
+
+  const last7DaysQuestions = dayLabels.map(({ key }) => ({
+    day: key,
+    count: last7DaysQuestionsRaw.filter((q) => dayKey(q.createdAt) === key).length,
+  }))
+
+  const last7DaysPractice = dayLabels.map(({ key }) => {
+    const matches = last7DaysPracticeRaw.filter(
+      (p) => dayKey(p.createdAt) === key
+    )
+    return {
+      day: key,
+      count: matches.length,
+      correct: matches.filter((m) => m.isCorrect).length,
+    }
+  })
 
   // Compute current streak (consecutive correct from most recent)
   let streak = 0
@@ -173,12 +212,8 @@ export async function GET() {
       byLanguage: langBreakdown.map((l) => ({ language: l.language, count: l._count })),
     },
     activity: {
-      last7DaysQuestions: last7DaysQuestions.map((d) => ({ day: d.day, count: Number(d.count) })),
-      last7DaysPractice: last7DaysPractice.map((d) => ({
-        day: d.day,
-        count: Number(d.count),
-        correct: Number(d.correct),
-      })),
+      last7DaysQuestions,
+      last7DaysPractice,
     },
   })
 }
