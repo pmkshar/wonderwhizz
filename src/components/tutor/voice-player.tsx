@@ -10,6 +10,8 @@ interface VoicePlayerProps {
   text: string
   voiceId: string
   disabled?: boolean
+  /** If true, automatically start playing when the component mounts or text changes */
+  autoPlay?: boolean
 }
 
 /**
@@ -32,7 +34,7 @@ interface VoicePlayerProps {
  *      play with an <audio> element.
  *   3. As a last resort, try the server-side /api/tts route (ZAI TTS).
  */
-export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
+export function VoicePlayer({ text, voiceId, disabled, autoPlay }: VoicePlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [loading, setLoading] = useState(false)
   const [playing, setPlaying] = useState(false)
@@ -101,6 +103,24 @@ export function VoicePlayer({ text, voiceId, disabled }: VoicePlayerProps) {
       }
     }
   }, [])
+
+  // Auto-play: when autoPlay is true and text becomes non-empty, start playing
+  const hasAutoPlayed = useRef(false)
+  useEffect(() => {
+    if (autoPlay && text.trim() && !hasAutoPlayed.current && !playing && !loading) {
+      hasAutoPlayed.current = true
+      // Small delay to let the UI settle before starting voice
+      const timer = setTimeout(() => {
+        handlePlay()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+    // Reset when text changes (new answer)
+    return () => {
+      hasAutoPlayed.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay, text])
 
   /**
    * Score a system voice by how well it matches our preferred Indian accent.

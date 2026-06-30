@@ -19,6 +19,7 @@ import {
   Check,
   RefreshCw,
   BookOpen,
+  Mic,
 } from 'lucide-react'
 import {
   ExplanationStyleSelector,
@@ -29,12 +30,14 @@ import { MathsTopicSelector } from '../maths-topic-selector'
 import { SyllabusPicker } from '../syllabus-picker'
 import { Markdown } from '@/components/markdown/markdown'
 import { VoicePlayer } from '../voice-player'
+import { VoiceInput } from '../voice-input'
 import {
   EXPLANATION_STYLES,
   type ExplanationStyleId,
 } from '@/lib/explanation-prompts'
 import { SUBJECTS, getMathsTopic } from '@/lib/subjects'
 import { describeSyllabusContext, getBoard, getChapter } from '@/lib/syllabus'
+import { getVoiceById } from '@/lib/languages'
 import {
   getSampleQuestions,
   getGeneralSampleQuestions,
@@ -78,6 +81,8 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
   const [question, setQuestion] = useState('')
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [useMathKeyboard, setUseMathKeyboard] = useState(false)
+  const [voiceModeActive, setVoiceModeActive] = useState(false)
+  // When true, the last question was asked by voice and the answer should auto-play
   const [showSettings, setShowSettings] = useState(false)
   // Syllabus + chapter context (kept across turns so the tutor remembers)
   const [boardId, setBoardId] = useState<string | null>(null)
@@ -85,6 +90,9 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const questionRef = useRef(question)
+  // Keep questionRef in sync so the VoiceInput onEnd callback sees the latest value
+  questionRef.current = question
 
   // Pick up prefilled question from sessionStorage (e.g. sent from Practice page)
   useEffect(() => {
@@ -283,6 +291,7 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 
   const subjectData = SUBJECTS.find((s) => s.id === subject)
   const styleData = EXPLANATION_STYLES.find((s) => s.id === style)
+  const voice = getVoiceById(language)
   const boardData = boardId ? getBoard(boardId) : undefined
   const chapterData =
     boardId && chapterId ? getChapter(boardId, subject, grade, chapterId) : undefined
@@ -485,11 +494,12 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
           />
         ) : (
           <div className="space-y-5">
-            {turns.map((turn) => (
+            {turns.map((turn, i) => (
               <ChatTurnBubble
                 key={turn.id}
                 turn={turn}
                 onRegenerate={() => handleRegenerate(turn.id)}
+                autoPlayVoice={voiceModeActive && i === turns.length - 1 && !turn.loading}
               />
             ))}
             {turns.length > 1 && (
@@ -525,7 +535,7 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
         />
       )}
 
-      {/* Composer (input + send) at the bottom */}
+      {/* Composer (input + send + voice) at the bottom */}
       <div className="rounded-xl border border-border/60 bg-card p-2.5 shadow-sm sm:p-3">
         {useMathKeyboard && subject === 'maths' ? (
           <MathKeyboard
@@ -550,7 +560,7 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
             rows={2}
             placeholder={
               subjectData
-                ? `Ask your ${subjectData.label} question...  (Ctrl/⌘ + Enter to send)`
+                ? `Ask your ${subjectData.label} question...  (Ctrl/⌘ + Enter to send, or tap 🎙️ Voice)`
                 : 'Pick a subject first...'
             }
             className="resize-none border-0 bg-transparent text-base shadow-none focus-visible:ring-0"
@@ -560,6 +570,23 @@ export function AskPage({ user, grade: gradeProp }: AskPageProps) {
 
         <div className="mt-2 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
+            {/* Voice input — speak your question */}
+            <VoiceInput
+              lang={voice?.bcp47 ?? 'en-IN'}
+              onTranscript={setQuestion}
+              onEnd={() => {
+                // Mark that this was a voice-initiated question
+                setVoiceModeActive(true)
+                // Auto-submit after voice recognition ends (with a short delay
+                // so the student can see the transcribed text first)
+                setTimeout(() => {
+                  if (questionRef.current.trim().length >= 2) {
+                    handleAsk()
+                  }
+                }, 600)
+              }}
+              disabled={turns.some((t) => t.loading)}
+            />
             {subject === 'maths' && (
               <Button
                 type="button"
@@ -776,9 +803,11 @@ function QuickQuestionsBar({
 function ChatTurnBubble({
   turn,
   onRegenerate,
+  autoPlayVoice = false,
 }: {
   turn: ChatTurn
   onRegenerate: () => void
+  autoPlayVoice?: boolean
 }) {
   const subjectData = SUBJECTS.find((s) => s.id === turn.subject)
   const styleData = EXPLANATION_STYLES.find((s) => s.id === turn.style)
@@ -920,7 +949,7 @@ function ChatTurnBubble({
                 <Markdown content={turn.answer} />
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-border pt-2">
-                <VoicePlayer text={turn.answer} voiceId={turn.language} />
+                <VoicePlayer text={turn.answer} voiceId={turn.language} autoPlay={autoPlayVoice} />
               </div>
             </>
           )}
