@@ -23,3 +23,33 @@ Stage Summary:
 - Added Telugu and Tamil voice languages (5 total)
 - Created /api/tts/proxy server-side route for non-English TTS
 - All code committed and ready for deploy
+
+---
+Task ID: wonderwhiz-voice-chat
+Agent: main (Super Z)
+Task: Add voice chat to Ask AI mode — mic input + auto-submit + auto-play answer voice-over for all subjects
+
+Work Log:
+- Created src/components/tutor/voice-input.tsx — reusable mic button using Web Speech API (SpeechRecognition)
+  - Supports all Indian languages via BCP-47 codes (en-IN, hi-IN, kn-IN, te-IN, ta-IN)
+  - Continuous + interim results for live transcription
+  - Visual feedback: animated red pulse indicator while listening
+  - Gracefully hides on browsers without SpeechRecognition (Firefox)
+  - Stops on manual click or auto-stops after silence
+- Modified src/components/tutor/pages/ask-page.tsx:
+  - Added VoiceInput button in the composer area (left of Math KB / Clear buttons)
+  - Voice input lang matches the selected voice language (e.g. Hindi voice → Hindi speech recognition)
+  - Auto-submits the question 600ms after voice recognition ends
+  - Added voiceModeActive state — when a question is asked via voice, the answer auto-plays voice-over
+  - Updated placeholder text to mention Voice option
+- Modified src/components/tutor/voice-player.tsx:
+  - Added autoPlay prop — when true, automatically starts playing the answer voice-over
+  - Used by ChatTurnBubble when the question was voice-initiated
+- Recreated src/app/api/tts/proxy/route.ts (was lost during git filter-repo)
+- TypeScript: zero errors; Build: succeeds with all routes present
+
+Stage Summary:
+- Voice chat flow: Student taps 🎙️ Voice → speaks question → auto-submits → AI answers in chat → voice-over auto-plays
+- Works for ALL subjects and ALL voice languages
+- Pushed to GitHub: https://github.com/pmkshar/wonderwhizz (commit 42af6ba)
+- Needs Vercel redeploy to go live
