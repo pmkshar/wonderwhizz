@@ -16,7 +16,7 @@ import { getBoard, getChapter } from '@/lib/syllabus'
 export const maxDuration = 60
 export const runtime = 'nodejs'
 
-const VALID_SUBJECTS = new Set(['maths', 'hindi', 'science', 'kannada'])
+const VALID_SUBJECTS = new Set(['maths', 'hindi', 'science', 'english', 'english_grammar', 'kannada'])
 const VALID_BOARD_IDS = new Set(['cbse', 'icse', 'kseab', 'msbshe'])
 
 interface HistoryTurn {
@@ -107,9 +107,12 @@ export async function POST(req: Request) {
     chapterNumber,
     chapterTopics,
   })
+  const isEnglishSubject = subject === 'english' || subject === 'english_grammar'
   const languageInstruction: ChatMessage = {
     role: 'system',
-    content: `The student wants the answer explained in this language: ${language}.
+    content: isEnglishSubject
+      ? `The student is studying English. Always respond in clear, simple English suitable for the student's grade. ${language !== 'en' ? `However, since the student selected ${language} voice, you may briefly translate key terms into ${language} in parentheses.` : ''}`
+      : `The student wants the answer explained in this language: ${language}.
 If the chosen language is Hindi or Kannada, write the explanation primarily in that language (you may keep mathematical notation, code, and proper nouns in English).
 If English, write in clear simple English.`,
   }

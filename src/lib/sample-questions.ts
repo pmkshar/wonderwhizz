@@ -127,10 +127,58 @@ const KANNADA_TEMPLATES: Template[] = [
   }),
 ]
 
+const ENGLISH_TEMPLATES: Template[] = [
+  (t) => ({
+    text: `Explain the concept of ${t} with clear examples suitable for my grade.`,
+    tag: 'Concept + example',
+    emoji: '📖',
+  }),
+  (t) => ({
+    text: `What are the different types of ${t}? Give an example for each type.`,
+    tag: 'Types + examples',
+    emoji: '📝',
+  }),
+  (t) => ({
+    text: `Give me 3 practice exercises on ${t} with answers.`,
+    tag: 'Practice exercises',
+    emoji: '✏️',
+  }),
+  (t) => ({
+    text: `What are common mistakes students make with ${t}?`,
+    tag: 'Common mistakes',
+    emoji: '⚠️',
+  }),
+]
+
+const ENGLISH_GRAMMAR_TEMPLATES: Template[] = [
+  (t) => ({
+    text: `Explain the grammar rule for ${t} with 5 example sentences.`,
+    tag: 'Rule + examples',
+    emoji: '✏️',
+  }),
+  (t) => ({
+    text: `What is the difference between correct and incorrect usage of ${t}? Show examples.`,
+    tag: 'Correct vs incorrect',
+    emoji: '✔️',
+  }),
+  (t) => ({
+    text: `Give me a quiz with 5 questions on ${t} with answers.`,
+    tag: 'Grammar quiz',
+    emoji: '🧠',
+  }),
+  (t) => ({
+    text: `How do I identify ${t} in a sentence? Walk me through step by step.`,
+    tag: 'Identification steps',
+    emoji: '🔍',
+  }),
+]
+
 const TEMPLATES_BY_SUBJECT: Record<string, Template[]> = {
   maths: MATHS_TEMPLATES,
   science: SCIENCE_TEMPLATES,
   hindi: HINDI_TEMPLATES,
+  english: ENGLISH_TEMPLATES,
+  english_grammar: ENGLISH_GRAMMAR_TEMPLATES,
   kannada: KANNADA_TEMPLATES,
 }
 

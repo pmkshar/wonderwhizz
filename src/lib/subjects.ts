@@ -223,6 +223,32 @@ export const SUBJECTS: SubjectMeta[] = [
     hasTopics: false,
   },
   {
+    id: 'english',
+    label: 'English',
+    emoji: '📖',
+    description: 'Reading, writing, comprehension, literature',
+    gradient: 'from-indigo-400 to-blue-500',
+    examples: [
+      'What is the theme of the poem "Daffodils"?',
+      'Write a letter to the editor about pollution',
+      'Explain the difference between a simile and a metaphor',
+    ],
+    hasTopics: false,
+  },
+  {
+    id: 'english_grammar',
+    label: 'English Grammar',
+    emoji: '✏️',
+    description: 'Tenses, parts of speech, sentence structure, punctuation',
+    gradient: 'from-teal-400 to-cyan-500',
+    examples: [
+      'What is the difference between present perfect and past simple?',
+      'Identify the subject and predicate in "The cat sat on the mat"',
+      'Explain active and passive voice with examples',
+    ],
+    hasTopics: false,
+  },
+  {
     id: 'kannada',
     label: 'Kannada',
     emoji: '🦁',

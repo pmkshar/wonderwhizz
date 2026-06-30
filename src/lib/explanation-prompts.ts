@@ -123,6 +123,8 @@ export const SUBJECT_CONTEXT: Record<string, string> = {
   maths: `Subject: Mathematics (K-12). Topics: pre-algebra, algebra, geometry, trigonometry, calculus, statistics, linear algebra, word problems. Always show calculations clearly.`,
   hindi: `Subject: Hindi (भाषा व्याकरण, साहित्य). Topics: वर्णमाला, संधि, समास, अलंकार, रस, काव्य परिचय, पद्य और गद्य. हिंदी में समझाएं.`,
   science: `Subject: Science (K-12). Topics: physics, chemistry, biology, environmental science. Use real-life examples.`,
+  english: `Subject: English (language & literature). Topics: reading comprehension, writing skills, letter writing, essay writing, poetry analysis, prose, drama, vocabulary, idioms. Always respond in clear, simple English suitable for the student's grade.`,
+  english_grammar: `Subject: English Grammar. Topics: tenses, parts of speech (nouns, verbs, adjectives, adverbs, prepositions, conjunctions, pronouns, interjections), sentence structure, active & passive voice, direct & indirect speech, punctuation, clauses, phrases, articles, subject-verb agreement. Always respond in clear, simple English with plenty of examples.`,
   kannada: `Subject: Kannada (ಕನ್ನಡ ಭಾಷೆ ಮತ್ತು ಸಾಹಿತ್ಯ). Topics: ವರ್ಣಮಾಲೆ, ಸಂಧಿ, ಸಮಾಸ, ಅಲಂಕಾರ, ರಸ, ಪದ್ಯ, ಗದ್ಯ. ಕನ್ನಡದಲ್ಲಿ ವಿವರಿಸಿ.`,
 }
 

@@ -41,7 +41,7 @@ export const SYLLABUS_BOARDS: SyllabusBoard[] = [
     emoji: '📘',
     description: 'Central Board of Secondary Education — NCERT textbooks, used by Kendriya Vidyalayas, DAV, DPS and most central schools.',
     grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-    subjectIds: ['maths', 'science', 'hindi', 'kannada'],
+    subjectIds: ['maths', 'science', 'hindi', 'english', 'english_grammar', 'kannada'],
   },
   {
     id: 'icse',
@@ -50,7 +50,7 @@ export const SYLLABUS_BOARDS: SyllabusBoard[] = [
     emoji: '📗',
     description: 'Indian Certificate of Secondary Education — rigorous English-medium syllabus with separate Physics/Chemistry/Biology papers in high school.',
     grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    subjectIds: ['maths', 'science', 'hindi', 'kannada'],
+    subjectIds: ['maths', 'science', 'hindi', 'english', 'english_grammar', 'kannada'],
   },
   {
     id: 'kseab',
@@ -59,7 +59,7 @@ export const SYLLABUS_BOARDS: SyllabusBoard[] = [
     emoji: '📕',
     description: 'Karnataka School Examination and Assessment Board — state syllabus in Kannada & English medium.',
     grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    subjectIds: ['maths', 'science', 'hindi', 'kannada'],
+    subjectIds: ['maths', 'science', 'hindi', 'english', 'english_grammar', 'kannada'],
   },
   {
     id: 'msbshe',
@@ -68,7 +68,7 @@ export const SYLLABUS_BOARDS: SyllabusBoard[] = [
     emoji: '📙',
     description: 'Maharashtra State Board of Secondary & Higher Secondary Education — state syllabus in Marathi & English medium.',
     grades: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    subjectIds: ['maths', 'science', 'hindi', 'kannada'],
+    subjectIds: ['maths', 'science', 'hindi', 'english', 'english_grammar', 'kannada'],
   },
 ]
 
