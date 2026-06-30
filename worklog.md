@@ -53,3 +53,29 @@ Stage Summary:
 - Works for ALL subjects and ALL voice languages
 - Pushed to GitHub: https://github.com/pmkshar/wonderwhizz (commit 42af6ba)
 - Needs Vercel redeploy to go live
+
+---
+Task ID: wonderwhiz-deploy-fix
+Agent: main (Super Z)
+Task: Fix missing English/English Grammar subjects in UI, add Telugu/Tamil to VOICES array, fix voice-player CORS by using server-side TTS proxy, deploy everything to Vercel
+
+Work Log:
+- Found English & English Grammar were never added to subjects.ts SUBJECTS array (the UI picker)
+- Added English (📖) and English Grammar (✏️) to subjects.ts
+- Added English & English Grammar SUBJECT_CONTEXT to explanation-prompts.ts
+- Added 'english' and 'english_grammar' to all 4 boards' subjectIds in syllabus.ts
+- Added 'english' and 'english_grammar' to VALID_SUBJECTS in api/tutor/route.ts
+- Added isEnglishSubject logic to languageInstruction so English subjects always respond in English
+- Added ENGLISH_TEMPLATES and ENGLISH_GRAMMAR_TEMPLATES to sample-questions.ts
+- Added Telugu (te-IN) and Tamil (ta-IN) to VOICES array in languages.ts
+- Fixed voice-player.tsx: replaced direct browser-side Google TTS fetch (CORS-blocked) with server-side /api/tts/proxy call
+- Removed unused buildGoogleTtsUrl, chunkText, playUrl functions from voice-player.tsx
+- Deployed to Vercel (wonderwhizz.vercel.app) using new token vcp_7tIg5u1E...
+- Verified TTS proxy works on production for all 5 languages (en, hi, kn, te, ta)
+
+Stage Summary:
+- All 6 subjects now visible and working on wonderwhizz.vercel.app
+- Voice chat with mic input working for all subjects
+- Non-English voice-over working via server-side TTS proxy (no more CORS issues)
+- 5 voice languages: English, Hindi, Kannada, Telugu, Tamil
+- Code pushed to GitHub and deployed to Vercel
