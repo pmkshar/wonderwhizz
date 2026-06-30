@@ -45,6 +45,26 @@ export const VOICES: VoiceOption[] = [
     flag: '🇮🇳',
     greeting: 'ನಮಸ್ಕಾರ ಸ್ನೇಹಿತ! ಒಟ್ಟಿಗೆ ಪರಿಹರಿಸೋಣ.',
   },
+  {
+    id: 'te',
+    label: 'Telugu',
+    nativeLabel: 'తెలుగు',
+    language: 'Telugu',
+    bcp47: 'te-IN',
+    voice: 'tongtong',
+    flag: '🇮🇳',
+    greeting: 'నమస్కారం స్నేహితా! కలిసి పరిష్కరిద్దాం.',
+  },
+  {
+    id: 'ta',
+    label: 'Tamil',
+    nativeLabel: 'தமிழ்',
+    language: 'Tamil',
+    bcp47: 'ta-IN',
+    voice: 'tongtong',
+    flag: '🇮🇳',
+    greeting: 'வணக்கம் நண்பா! சேர்ந்து தீர்ப்போம்.',
+  },
 ]
 
 export function getVoiceById(id: string): VoiceOption {

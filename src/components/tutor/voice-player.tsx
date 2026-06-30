@@ -297,55 +297,30 @@ export function VoicePlayer({ text, voiceId, disabled, autoPlay }: VoicePlayerPr
   }
 
   /**
-   * Build a Google Translate TTS URL for the text.
-   * This is the same endpoint used by Google Translate's "Listen" button
-   * and supports all major Indian languages (hi, kn, en-IN, ta, te, ml, mr, bn...).
-   *
-   * Note: Google rate-limits this if abused. We chunk to 200 chars (Google's
-   * TTS URL length cap) and play sequentially if needed.
+   * Use the server-side /api/tts/proxy route to fetch Google TTS audio.
+   * This avoids CORS issues since the server fetches from Google and returns
+   * the MP3 with proper CORS headers. Supports: hi, kn, te, ta, en, mr, bn.
    */
   async function handleGoogleTts() {
     setLoading(true)
     try {
-      // Google TTS has a ~200 char URL limit per request. Chunk longer text.
-      const chunks = chunkText(text.slice(0, 1500), 190)
-      if (chunks.length === 0) {
-        throw new Error('Nothing to read.')
+      const res = await fetch('/api/tts/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 1500), lang: langPrefix }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? `TTS proxy failed (HTTP ${res.status})`)
       }
-
-      // Build a single combined audio by fetching each chunk and concatenating.
-      // For simplicity (and since most tutor answers are < 200 chars when spoken),
-      // if there's only one chunk we just play it directly.
-      if (chunks.length === 1) {
-        const url = buildGoogleTtsUrl(chunks[0], langPrefix)
-        await playUrl(url)
-        setVoiceMode('google')
-        return
-      }
-
-      // Multiple chunks — fetch each, concatenate as Blob, play
-      const blobParts: ArrayBuffer[] = []
-      for (const chunk of chunks) {
-        const url = buildGoogleTtsUrl(chunk, langPrefix)
-        try {
-          const res = await fetch(url)
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          const buf = await res.arrayBuffer()
-          blobParts.push(buf)
-        } catch (err) {
-          console.warn('[voice] google tts chunk failed', err)
-          // skip failed chunk; continue
-        }
-      }
-      if (blobParts.length === 0) throw new Error('All chunks failed')
-      const blob = new Blob(blobParts, { type: 'audio/mpeg' })
-      const blobUrl = URL.createObjectURL(blob)
-      setAudioUrl(blobUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setAudioUrl(url)
       setUsingFallback(true)
       setVoiceMode('google')
       setTimeout(async () => {
         if (audioRef.current) {
-          audioRef.current.src = blobUrl
+          audioRef.current.src = url
           try {
             await audioRef.current.play()
             setPlaying(true)
@@ -355,31 +330,12 @@ export function VoicePlayer({ text, voiceId, disabled, autoPlay }: VoicePlayerPr
         }
       }, 50)
     } catch (err) {
-      console.warn('[voice] google tts failed, trying server TTS', err)
+      console.warn('[voice] google tts proxy failed, trying server TTS', err)
       // Last resort: server-side /api/tts (ZAI TTS)
       await handleServerTts()
     } finally {
       setLoading(false)
     }
-  }
-
-  /** Play a single URL via the audio element. */
-  async function playUrl(url: string) {
-    setAudioUrl(url)
-    setUsingFallback(true)
-    setTimeout(async () => {
-      if (audioRef.current) {
-        audioRef.current.src = url
-        try {
-          await audioRef.current.play()
-          setPlaying(true)
-        } catch (err) {
-          console.warn('[voice] audio.play() failed', err)
-          // CORS or autoplay policy — show toast and let user tap play
-          toast.error('Tap play again to listen.')
-        }
-      }
-    }, 50)
   }
 
   async function handleServerTts() {
@@ -492,53 +448,4 @@ export function VoicePlayer({ text, voiceId, disabled, autoPlay }: VoicePlayerPr
   )
 }
 
-/** Build a Google Translate TTS URL for a single chunk of text. */
-function buildGoogleTtsUrl(text: string, langPrefix: string): string {
-  // Google TTS expects lang codes like 'hi', 'kn', 'en'. For Indian English
-  // we use 'en-IN' style — Google accepts both but 'en' is more reliable.
-  const lang = langPrefix === 'en' ? 'en-IN' : langPrefix
-  const params = new URLSearchParams({
-    ie: 'UTF-8',
-    q: text,
-    tl: lang,
-    total: '1',
-    idx: '0',
-    textlen: String(text.length),
-    client: 'tw-ob',
-  })
-  return `https://translate.google.com/translate_tts?${params.toString()}`
-}
 
-/** Split text into chunks of maxLen chars, breaking at sentence boundaries. */
-function chunkText(text: string, maxLen: number): string[] {
-  if (text.length <= maxLen) return [text]
-  const chunks: string[] = []
-  // Split on sentence-ending punctuation first, then on spaces
-  const sentences = text.split(/(?<=[.!?।؟])\s+/)
-  let current = ''
-  for (const s of sentences) {
-    if ((current + ' ' + s).trim().length <= maxLen) {
-      current = (current + ' ' + s).trim()
-    } else {
-      if (current) chunks.push(current)
-      // If a single sentence is longer than maxLen, hard-split it
-      if (s.length > maxLen) {
-        const words = s.split(' ')
-        let buf = ''
-        for (const w of words) {
-          if ((buf + ' ' + w).trim().length <= maxLen) {
-            buf = (buf + ' ' + w).trim()
-          } else {
-            if (buf) chunks.push(buf)
-            buf = w
-          }
-        }
-        if (buf) chunks.push(buf)
-      } else {
-        current = s
-      }
-    }
-  }
-  if (current) chunks.push(current)
-  return chunks
-}
